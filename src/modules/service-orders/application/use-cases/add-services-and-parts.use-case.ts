@@ -21,6 +21,8 @@ export interface AddServicesAndPartsResult {
   stockAlerts: StockLevel[];
 }
 
+type PartsAvailability = Awaited<ReturnType<CheckPartsAvailabilityUseCase['execute']>>;
+
 @Injectable()
 export class AddServicesAndPartsUseCase {
   constructor(
@@ -35,54 +37,13 @@ export class AddServicesAndPartsUseCase {
     dto: AddServicesAndPartsDto,
     mechanicId: string,
   ): Promise<AddServicesAndPartsResult> {
-    this.validatePartItems(dto);
+    this.rejectRepeatedParts(dto);
 
-    const serviceOrder = await this.serviceOrderRepository.findById(id);
-    if (!serviceOrder) throw new NotFoundError('Service order not found');
-
-    const serviceItemsPromise =
-      dto.services.length > 0
-        ? this.findServicesByIdList
-            .execute(dto.services.map((item) => item.serviceId))
-            .then((services) =>
-              services.map((service) => ServiceItem.create(service.id, service.price.getValue())),
-            )
-        : Promise.resolve([]);
-
-    // Estoque lógico em lote: já desconta o que outras OS em aberto reservaram,
-    // para que a mesma peça não seja comprometida duas vezes.
-    const partItemsPromise = this.checkPartsAvailability
-      .execute(dto.parts)
-      .then((availabilities) => {
-        const unavailable = availabilities.find((availability) => !availability.isAvailable);
-        if (unavailable) {
-          const { part, availableQuantity } = unavailable.stockLevel;
-          throw new InsufficientStockError(
-            part.name,
-            availableQuantity,
-            unavailable.requestedQuantity,
-          );
-        }
-
-        const partsById = new Map(
-          availabilities.map((availability) => [
-            availability.stockLevel.part.id,
-            availability.stockLevel.part,
-          ]),
-        );
-
-        return dto.parts.map((item) => {
-          const part = partsById.get(item.inventoryId);
-          if (!part) {
-            throw new NotFoundError(`Part ${item.inventoryId} not found`);
-          }
-          return PartItem.create(part.id, item.quantity, part.unitPrice, part.unitOfMeasure.value);
-        });
-      });
+    const serviceOrder = await this.findServiceOrder(id);
 
     const [newServiceItems, newPartItems] = await Promise.all([
-      serviceItemsPromise,
-      partItemsPromise,
+      this.buildServiceItems(dto),
+      this.buildPartItems(dto),
     ]);
 
     const totalAmount = await this.calculateTotalAmount.execute(
@@ -101,6 +62,51 @@ export class AddServicesAndPartsUseCase {
     };
   }
 
+  private async findServiceOrder(id: string): Promise<ServiceOrder> {
+    const serviceOrder = await this.serviceOrderRepository.findById(id);
+    if (!serviceOrder) throw new NotFoundError('Service order not found');
+    return serviceOrder;
+  }
+
+  private async buildServiceItems(dto: AddServicesAndPartsDto): Promise<ServiceItem[]> {
+    if (dto.services.length === 0) return [];
+
+    const services = await this.findServicesByIdList.execute(
+      dto.services.map((item) => item.serviceId),
+    );
+    return services.map((service) => ServiceItem.create(service.id, service.price.getValue()));
+  }
+
+  /**
+   * Usa o estoque lógico em lote: já desconta o que outras OS em aberto reservaram,
+   * para que a mesma peça não seja comprometida duas vezes.
+   */
+  private async buildPartItems(dto: AddServicesAndPartsDto): Promise<PartItem[]> {
+    const availabilities = await this.checkPartsAvailability.execute(dto.parts);
+    this.assertAllPartsAvailable(availabilities);
+
+    const partsById = new Map(
+      availabilities.map((availability) => [
+        availability.stockLevel.part.id,
+        availability.stockLevel.part,
+      ]),
+    );
+
+    return dto.parts.map((item) => {
+      const part = partsById.get(item.inventoryId);
+      if (!part) throw new NotFoundError(`Part ${item.inventoryId} not found`);
+      return PartItem.create(part.id, item.quantity, part.unitPrice, part.unitOfMeasure.value);
+    });
+  }
+
+  private assertAllPartsAvailable(availabilities: PartsAvailability): void {
+    const unavailable = availabilities.find((availability) => !availability.isAvailable);
+    if (!unavailable) return;
+
+    const { part, availableQuantity } = unavailable.stockLevel;
+    throw new InsufficientStockError(part.name, availableQuantity, unavailable.requestedQuantity);
+  }
+
   /**
    * Calcula, depois de salvar a OS, quais peças recém-adicionadas
    * deixaram o estoque lógico abaixo do mínimo recomendado.
@@ -115,7 +121,7 @@ export class AddServicesAndPartsUseCase {
       .filter((stockLevel) => stockLevel.isBelowMinimum());
   }
 
-  private validatePartItems(dto: AddServicesAndPartsDto): void {
+  private rejectRepeatedParts(dto: AddServicesAndPartsDto): void {
     const inventoryIds = new Set<string>();
 
     for (const item of dto.parts) {
