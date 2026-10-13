@@ -8,6 +8,7 @@
   "scripts": {
     "db:migrate:dev": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
+    "db:bootstrap-admin": "ts-node -r tsconfig-paths/register prisma/bootstrap-admin.ts",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
