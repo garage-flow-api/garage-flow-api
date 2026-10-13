@@ -39,9 +39,9 @@ describe('MonitoringController (integration)', () => {
     });
   });
 
-  describe('GET /read', () => {
+  describe('GET /ready', () => {
     it('returns 200 and ready when database responds', async () => {
-      const response = await request(app.getHttpServer()).get('/read').expect(200);
+      const response = await request(app.getHttpServer()).get('/ready').expect(200);
 
       expect(response.body).toMatchObject({ status: 'ready' });
       expect(response.body.timestamp).toEqual(expect.any(String));
