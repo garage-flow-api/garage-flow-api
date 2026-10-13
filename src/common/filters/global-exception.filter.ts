@@ -7,7 +7,13 @@ import {
   Logger,
 } from '@nestjs/common';
 import { type Request, type Response } from 'express';
-import { DomainError } from '@common/errors/domain.error';
+import {
+  BusinessRuleError,
+  ConflictError,
+  DomainError,
+  NotFoundError,
+  UnauthorizedError,
+} from '@common/errors/domain.error';
 
 type HttpExceptionResponse = {
   message?: string | string[];
@@ -39,10 +45,11 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
 
     if (exception instanceof DomainError) {
-      this.logger.warn(`${request.method} ${request.url} - Domain error: ${exception.message}`);
-      response
-        .status(HttpStatus.BAD_REQUEST)
-        .json(this.createResponse(HttpStatus.BAD_REQUEST, exception.message, request));
+      const status = this.statusFor(exception);
+      this.logger.warn(
+        `${request.method} ${request.url} - ${status} - ${exception.name}: ${exception.message}`,
+      );
+      response.status(status).json(this.createResponse(status, exception.message, request));
       return;
     }
 
@@ -75,5 +82,13 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       timestamp: new Date().toISOString(),
       path: request.url,
     };
+  }
+
+  private statusFor(error: DomainError): HttpStatus {
+    if (error instanceof NotFoundError) return HttpStatus.NOT_FOUND;
+    if (error instanceof ConflictError) return HttpStatus.CONFLICT;
+    if (error instanceof BusinessRuleError) return HttpStatus.UNPROCESSABLE_ENTITY;
+    if (error instanceof UnauthorizedError) return HttpStatus.UNAUTHORIZED;
+    return HttpStatus.BAD_REQUEST;
   }
 }

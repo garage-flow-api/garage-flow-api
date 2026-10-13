@@ -1,4 +1,5 @@
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundError } from '@common/errors/domain.error';
+
 import { GetServiceOrderTrackingLinkUseCase } from '@service-orders/application/use-cases/get-service-order-tracking-link.use-case';
 import { type ServiceOrderRepository } from '@service-orders/domain/repositories/service-order.repository';
 import { ServiceOrder } from '@service-orders/domain/entities/service-order.entity';
@@ -32,9 +33,9 @@ describe('GetServiceOrderTrackingLinkUseCase', () => {
     expect(resolveTrackingToken(token)).toBe(os.id);
   });
 
-  it('deve lançar NotFoundException se a OS não existir', async () => {
+  it('deve lançar NotFoundError se a OS não existir', async () => {
     repository.findById.mockResolvedValue(null);
 
-    await expect(useCase.execute(baseUrl, 'inexistente')).rejects.toThrow(NotFoundException);
+    await expect(useCase.execute(baseUrl, 'inexistente')).rejects.toThrow(NotFoundError);
   });
 });

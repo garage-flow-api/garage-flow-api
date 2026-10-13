@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { DomainError } from '@common/errors/domain.error';
 import { GetAverageExecutionTimeUseCase } from '@service-orders/application/use-cases/get-average-execution-time.use-case';
 import { type ServiceOrderRepository } from '@service-orders/domain/repositories/service-order.repository';
 
@@ -52,7 +52,7 @@ describe('GetAverageExecutionTimeUseCase', () => {
         from: new Date('2026-08-31T00:00:00.000Z'),
         to: new Date('2026-08-01T00:00:00.000Z'),
       }),
-    ).rejects.toThrow(BadRequestException);
+    ).rejects.toThrow(DomainError);
     expect(repository.findAverageExecutionTime).not.toHaveBeenCalled();
   });
 });

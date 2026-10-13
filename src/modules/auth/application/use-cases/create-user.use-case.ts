@@ -1,4 +1,6 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { ConflictError } from '@common/errors/domain.error';
+import { Injectable } from '@nestjs/common';
+
 import { randomUUID } from 'node:crypto';
 
 import { User, UserRole } from '@auth/domain/entities/user.entity';
@@ -25,7 +27,7 @@ export class CreateUserUseCase {
     const existingUser = await this.userRepository.findByEmail(input.email);
 
     if (existingUser) {
-      throw new ConflictException('User already exists');
+      throw new ConflictError('User already exists');
     }
 
     const passwordHash = await this.passwordHasher.hash(input.password);

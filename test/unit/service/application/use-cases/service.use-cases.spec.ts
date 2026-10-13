@@ -1,4 +1,5 @@
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundError } from '@common/errors/domain.error';
+
 import { CreateServiceUseCase } from '@service/application/use-cases/create-service.use-case';
 import { FindAllServicesUseCase } from '@service/application/use-cases/find-all-services.use-case';
 import { FindServiceByIdUseCase } from '@service/application/use-cases/find-service-by-id.use-case';
@@ -76,20 +77,20 @@ describe('FindServiceByIdUseCase', () => {
     expect(result.id).toBe(mockId);
   });
 
-  it('should throw NotFoundException when service not found', async () => {
+  it('should throw NotFoundError when service not found', async () => {
     repo.findById.mockResolvedValue(null);
 
     const useCase = new FindServiceByIdUseCase(repo);
-    await expect(useCase.execute(mockId)).rejects.toThrow(NotFoundException);
+    await expect(useCase.execute(mockId)).rejects.toThrow(NotFoundError);
   });
 
-  it('should throw NotFoundException when service is deleted', async () => {
+  it('should throw NotFoundError when service is deleted', async () => {
     const service = makeService();
     service.softDelete();
     repo.findById.mockResolvedValue(service);
 
     const useCase = new FindServiceByIdUseCase(repo);
-    await expect(useCase.execute(mockId)).rejects.toThrow(NotFoundException);
+    await expect(useCase.execute(mockId)).rejects.toThrow(NotFoundError);
   });
 });
 
@@ -112,11 +113,11 @@ describe('UpdateServiceUseCase', () => {
     expect(service.name).toBe('Alinhamento');
   });
 
-  it('should throw NotFoundException when service not found', async () => {
+  it('should throw NotFoundError when service not found', async () => {
     repo.findById.mockResolvedValue(null);
 
     const useCase = new UpdateServiceUseCase(repo);
-    await expect(useCase.execute(mockId, 'Alinhamento')).rejects.toThrow(NotFoundException);
+    await expect(useCase.execute(mockId, 'Alinhamento')).rejects.toThrow(NotFoundError);
   });
 });
 
@@ -139,11 +140,11 @@ describe('DeleteServiceUseCase', () => {
     expect(repo.update).toHaveBeenCalledWith(service);
   });
 
-  it('should throw NotFoundException when service not found', async () => {
+  it('should throw NotFoundError when service not found', async () => {
     repo.findById.mockResolvedValue(null);
 
     const useCase = new DeleteServiceUseCase(repo);
-    await expect(useCase.execute(mockId)).rejects.toThrow(NotFoundException);
+    await expect(useCase.execute(mockId)).rejects.toThrow(NotFoundError);
   });
 });
 
@@ -164,10 +165,10 @@ describe('FindServicesByIdListUseCase', () => {
     expect(result).toEqual([service1, service2]);
   });
 
-  it('should throw NotFoundException when no services found', async () => {
+  it('should throw NotFoundError when no services found', async () => {
     repo.findByIdList.mockResolvedValue([]);
 
     const useCase = new FindServicesByIdListUseCase(repo);
-    await expect(useCase.execute(['id-1', 'id-2'])).rejects.toThrow(NotFoundException);
+    await expect(useCase.execute(['id-1', 'id-2'])).rejects.toThrow(NotFoundError);
   });
 });

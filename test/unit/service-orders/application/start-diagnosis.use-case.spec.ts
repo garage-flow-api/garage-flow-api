@@ -1,8 +1,7 @@
-import { NotFoundException } from '@nestjs/common';
 import { StartDiagnosisUseCase } from '@service-orders/application/use-cases/start-diagnosis.use-case';
 import { type ServiceOrderRepository } from '@service-orders/domain/repositories/service-order.repository';
 import { ServiceOrderStatus } from '@service-orders/domain/value-objects/service-order-status.vo';
-import { DomainError } from '@common/errors/domain.error';
+import { DomainError, NotFoundError } from '@common/errors/domain.error';
 import { makeServiceOrder } from '../service-order.factory';
 
 describe('StartDiagnosisUseCase', () => {
@@ -40,6 +39,6 @@ describe('StartDiagnosisUseCase', () => {
   it('retorna erro quando a OS nao existe', async () => {
     repository.findById.mockResolvedValue(null);
 
-    await expect(useCase.execute('missing-order', 'mechanic-1')).rejects.toThrow(NotFoundException);
+    await expect(useCase.execute('missing-order', 'mechanic-1')).rejects.toThrow(NotFoundError);
   });
 });

@@ -1,4 +1,5 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BusinessRuleError, NotFoundError } from '@common/errors/domain.error';
+
 import { GenerateServiceOrderBudgetUseCase } from '@service-orders/application/use-cases/generate-service-order-budget.use-case';
 import { ServiceOrderStatus } from '@service-orders/domain/value-objects/service-order-status.vo';
 import { ServiceEntity } from '@service/domain/entities/service.entity';
@@ -150,23 +151,23 @@ describe('GenerateServiceOrderBudgetUseCase', () => {
     expect(budget.parts).toEqual([]);
   });
 
-  it('deve lançar NotFoundException se uma peça referenciada pela OS não for retornada pela busca em lote', async () => {
+  it('deve lançar NotFoundError se uma peça referenciada pela OS não for retornada pela busca em lote', async () => {
     const serviceOrder = buildServiceOrder();
     repository.findById.mockResolvedValue(serviceOrder);
     findPartsByIdList.execute.mockResolvedValue([]);
 
-    await expect(useCase.execute(serviceOrder.id)).rejects.toThrow(NotFoundException);
+    await expect(useCase.execute(serviceOrder.id)).rejects.toThrow(NotFoundError);
   });
 
-  it('deve lançar NotFoundException se um serviço referenciado pela OS não for retornado pela busca em lote', async () => {
+  it('deve lançar NotFoundError se um serviço referenciado pela OS não for retornado pela busca em lote', async () => {
     const serviceOrder = buildServiceOrder();
     repository.findById.mockResolvedValue(serviceOrder);
     findServicesByIdList.execute.mockResolvedValue([]);
 
-    await expect(useCase.execute(serviceOrder.id)).rejects.toThrow(NotFoundException);
+    await expect(useCase.execute(serviceOrder.id)).rejects.toThrow(NotFoundError);
   });
 
-  it('deve lançar NotFoundException se o serviço encontrado não possuir nome', async () => {
+  it('deve lançar NotFoundError se o serviço encontrado não possuir nome', async () => {
     const serviceOrder = buildServiceOrder();
     repository.findById.mockResolvedValue(serviceOrder);
     const serviceWithoutName = ServiceEntity.create({
@@ -178,29 +179,29 @@ describe('GenerateServiceOrderBudgetUseCase', () => {
     });
     findServicesByIdList.execute.mockResolvedValue([serviceWithoutName]);
 
-    await expect(useCase.execute(serviceOrder.id)).rejects.toThrow(NotFoundException);
+    await expect(useCase.execute(serviceOrder.id)).rejects.toThrow(NotFoundError);
   });
 
-  it('deve lançar NotFoundException se a OS não existir', async () => {
+  it('deve lançar NotFoundError se a OS não existir', async () => {
     repository.findById.mockResolvedValue(null);
 
-    await expect(useCase.execute('inexistente')).rejects.toThrow(NotFoundException);
+    await expect(useCase.execute('inexistente')).rejects.toThrow(NotFoundError);
   });
 
   it.each([ServiceOrderStatus.RECEIVED, ServiceOrderStatus.IN_DIAGNOSIS])(
-    'deve lançar BadRequestException se a OS estiver com status %s',
+    'deve lançar BusinessRuleError se a OS estiver com status %s',
     async (status) => {
       const serviceOrder = buildServiceOrder({ status });
       repository.findById.mockResolvedValue(serviceOrder);
 
-      await expect(useCase.execute(serviceOrder.id)).rejects.toThrow(BadRequestException);
+      await expect(useCase.execute(serviceOrder.id)).rejects.toThrow(BusinessRuleError);
     },
   );
 
-  it('deve lançar BadRequestException se a OS não possuir serviços nem peças', async () => {
+  it('deve lançar BusinessRuleError se a OS não possuir serviços nem peças', async () => {
     const serviceOrder = buildServiceOrder({ serviceItems: [], partItems: [] });
     repository.findById.mockResolvedValue(serviceOrder);
 
-    await expect(useCase.execute(serviceOrder.id)).rejects.toThrow(BadRequestException);
+    await expect(useCase.execute(serviceOrder.id)).rejects.toThrow(BusinessRuleError);
   });
 });

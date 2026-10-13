@@ -1,4 +1,6 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { BusinessRuleError, DomainError, NotFoundError } from '@common/errors/domain.error';
+import { Injectable } from '@nestjs/common';
+
 import { ServiceOrder } from '@service-orders/domain/entities/service-order.entity';
 import { ServiceItem } from '@service-orders/domain/entities/service-item.entity';
 import { PartItem } from '@service-orders/domain/entities/part-item.entity';
@@ -35,7 +37,7 @@ export class AddServicesAndPartsUseCase {
     this.validatePartItems(dto);
 
     const serviceOrder = await this.serviceOrderRepository.findById(id);
-    if (!serviceOrder) throw new NotFoundException('Service order not found');
+    if (!serviceOrder) throw new NotFoundError('Service order not found');
 
     const serviceItemsPromise =
       dto.services.length > 0
@@ -54,7 +56,7 @@ export class AddServicesAndPartsUseCase {
         const unavailable = availabilities.find((availability) => !availability.isAvailable);
         if (unavailable) {
           const { part, availableQuantity } = unavailable.stockLevel;
-          throw new BadRequestException(
+          throw new BusinessRuleError(
             `Unavailable quantity for part ${part.name}. Available: ${availableQuantity}, requested: ${unavailable.requestedQuantity}`,
           );
         }
@@ -69,7 +71,7 @@ export class AddServicesAndPartsUseCase {
         return dto.parts.map((item) => {
           const part = partsById.get(item.inventoryId);
           if (!part) {
-            throw new NotFoundException(`Part ${item.inventoryId} not found`);
+            throw new NotFoundError(`Part ${item.inventoryId} not found`);
           }
           return PartItem.create(part.id, item.quantity, part.unitPrice, part.unitOfMeasure.value);
         });
@@ -115,7 +117,7 @@ export class AddServicesAndPartsUseCase {
 
     for (const item of dto.parts) {
       if (inventoryIds.has(item.inventoryId)) {
-        throw new BadRequestException(
+        throw new DomainError(
           `Part ${item.inventoryId} cannot be added more than once in the same operation`,
         );
       }

@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { NotFoundError } from '@common/errors/domain.error';
+import { Injectable } from '@nestjs/common';
 import { ClientRepository } from '@client/domain/repositories/client.repository';
 import { ClientEntity } from '@client/domain/entities/client.entity';
 import { CpfCnpj } from '@client/domain/value-objects/cpf-cnpj-validator.vo';
@@ -10,7 +11,7 @@ export class FindClientByCpfCnpjUseCase {
   async execute(cpfCnpj: string): Promise<ClientEntity> {
     const normalized = CpfCnpj.create(cpfCnpj);
     const client = await this.clientRepository.findByCpfCnpj(normalized.value);
-    if (!client) throw new NotFoundException('Client not found');
+    if (!client) throw new NotFoundError('Client not found');
     return client;
   }
 }

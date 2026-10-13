@@ -1,4 +1,5 @@
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundError } from '@common/errors/domain.error';
+
 import { FindClientByCpfCnpjUseCase } from '@client/application/use-cases/find-client-by-cpf-cnpj.use-case';
 import { type ClientRepository } from '@client/domain/repositories/client.repository';
 import { InvalidCpfCnpjError } from '@client/domain/value-objects/cpf-cnpj-validator.vo';
@@ -32,7 +33,7 @@ describe('FindClientByCpfCnpjUseCase', () => {
   it('lança 404 quando o cliente não existe', async () => {
     repository.findByCpfCnpj.mockResolvedValue(null);
 
-    await expect(useCase.execute('52998224725')).rejects.toThrow(NotFoundException);
+    await expect(useCase.execute('52998224725')).rejects.toThrow(NotFoundError);
   });
 
   it('lança 400 quando o CPF/CNPJ é inválido', async () => {

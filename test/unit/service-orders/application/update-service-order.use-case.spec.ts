@@ -1,4 +1,5 @@
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundError } from '@common/errors/domain.error';
+
 import { UpdateServiceOrderUseCase } from '@service-orders/application/use-cases/update-service-order.use-case';
 import { ServiceOrder } from '@service-orders/domain/entities/service-order.entity';
 import { ServiceOrderStatus } from '@service-orders/domain/value-objects/service-order-status.vo';
@@ -63,11 +64,11 @@ describe('UpdateServiceOrderUseCase', () => {
     expect(os.vehicleId).toBe('vehicle-3');
   });
 
-  it('deve lançar NotFoundException se a OS não existir', async () => {
+  it('deve lançar NotFoundError se a OS não existir', async () => {
     repository.findById.mockResolvedValue(null);
 
     await expect(useCase.execute('os-inexistente', { vehicleId: 'vehicle-2' })).rejects.toThrow(
-      NotFoundException,
+      NotFoundError,
     );
     expect(repository.save).not.toHaveBeenCalled();
   });

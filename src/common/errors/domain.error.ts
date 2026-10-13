@@ -1,6 +1,14 @@
 export class DomainError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'DomainError';
+    this.name = new.target.name;
   }
 }
+
+export class NotFoundError extends DomainError {}
+
+export class ConflictError extends DomainError {}
+
+export class BusinessRuleError extends DomainError {}
+
+export class UnauthorizedError extends DomainError {}

@@ -4,12 +4,7 @@ import prettier from 'eslint-config-prettier';
 
 export default tseslint.config(
   {
-    ignores: [
-      'dist/',
-      'node_modules/',
-      'coverage/',
-      'prisma/migrations/',
-    ],
+    ignores: ['dist/', 'node_modules/', 'coverage/', 'prisma/migrations/'],
   },
 
   eslint.configs.recommended,
@@ -49,8 +44,8 @@ export default tseslint.config(
 
       // Código
       'no-console': 'warn',
-      'eqeqeq': ['error', 'always'],
-      'curly': ['error', 'all'],
+      eqeqeq: ['error', 'always'],
+      curly: ['error', 'all'],
 
       // Funções muito grandes
       'max-lines-per-function': [
@@ -59,6 +54,35 @@ export default tseslint.config(
           max: 80,
           skipBlankLines: true,
           skipComments: true,
+        },
+      ],
+    },
+  },
+
+  // Clean Architecture: domain/application não conhecem exceções HTTP do Nest
+  {
+    files: ['src/modules/*/domain/**/*.ts', 'src/modules/*/application/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@nestjs/common',
+              importNames: [
+                'HttpException',
+                'NotFoundException',
+                'BadRequestException',
+                'ConflictException',
+                'UnauthorizedException',
+                'ForbiddenException',
+                'UnprocessableEntityException',
+                'InternalServerErrorException',
+              ],
+              message:
+                'Nas camadas domain/application use os erros de @common/errors/domain.error.',
+            },
+          ],
         },
       ],
     },

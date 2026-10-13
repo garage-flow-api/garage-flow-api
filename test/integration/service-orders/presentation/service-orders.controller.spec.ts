@@ -377,7 +377,7 @@ describe('ServiceOrdersController (integration)', () => {
     expect(response.status).toBe(404);
   });
 
-  it('PATCH /service-orders/:id/add-services-and-parts deve retornar 400 se a quantidade solicitada exceder a disponível', async () => {
+  it('PATCH /service-orders/:id/add-services-and-parts deve retornar 422 se a quantidade solicitada exceder a disponível', async () => {
     const created = await request(app.getHttpServer())
       .post('/service-orders')
       .set('Authorization', adminAuthHeader())
@@ -389,7 +389,7 @@ describe('ServiceOrdersController (integration)', () => {
       .set('Authorization', mechanicAuthHeader())
       .send({ services: [], parts: [{ inventoryId: partId, quantity: 999 }] });
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(422);
   });
 
   it('PATCH /service-orders/:id/add-services-and-parts deve retornar 400 se a OS não estiver em diagnóstico', async () => {
@@ -460,7 +460,7 @@ describe('ServiceOrdersController (integration)', () => {
     expect(response.status).toBe(404);
   });
 
-  it('PATCH /service-orders/:id/budget deve retornar 400 se a OS estiver em RECEIVED', async () => {
+  it('PATCH /service-orders/:id/budget deve retornar 422 se a OS estiver em RECEIVED', async () => {
     const created = await request(app.getHttpServer())
       .post('/service-orders')
       .set('Authorization', adminAuthHeader())
@@ -470,10 +470,10 @@ describe('ServiceOrdersController (integration)', () => {
       .patch(`/service-orders/${created.body.id}/budget`)
       .set('Authorization', adminAuthHeader());
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(422);
   });
 
-  it('PATCH /service-orders/:id/budget deve retornar 400 se a OS não possuir serviços nem peças', async () => {
+  it('PATCH /service-orders/:id/budget deve retornar 422 se a OS não possuir serviços nem peças', async () => {
     const created = await request(app.getHttpServer())
       .post('/service-orders')
       .set('Authorization', adminAuthHeader())
@@ -488,7 +488,7 @@ describe('ServiceOrdersController (integration)', () => {
       .patch(`/service-orders/${created.body.id}/budget`)
       .set('Authorization', adminAuthHeader());
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(422);
   });
 
   it('GET /service-orders/:id/tracking-link deve retornar um link público absoluto para a OS', async () => {

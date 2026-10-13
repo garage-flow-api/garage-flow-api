@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { NotFoundError } from '@common/errors/domain.error';
+import { Injectable } from '@nestjs/common';
 
 import { UserRepository } from '@auth/domain/repositories/user.repository';
 
@@ -10,7 +11,7 @@ export class DeleteUserUseCase {
     const user = await this.userRepository.findById(id);
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundError('User not found');
     }
 
     user.softDelete();
