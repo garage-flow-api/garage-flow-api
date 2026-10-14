@@ -5,7 +5,6 @@ import { PrismaTransactionContext } from '@infra/database/prisma/prisma-transact
 import { ServiceOrder } from '@service-orders/domain/entities/service-order.entity';
 import {
   type AverageExecutionTimeMetrics,
-  ServiceOrderListItem,
   ServiceOrderRepository,
 } from '@service-orders/domain/repositories/service-order.repository';
 import { ServiceOrderMapper } from '@service-orders/infrastructure/service-order.mapper';

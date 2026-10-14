@@ -21,6 +21,11 @@ export class CreateClientUseCase {
   async execute(input: CreateClientInput): Promise<ClientEntity> {
     const cpfCnpj = CpfCnpj.create(input.cpfCnpj);
 
+    const clientWithSamePhone = await this.clientRepository.findByPhone(input.phone);
+    if (clientWithSamePhone) {
+      throw new ConflictError('Phone already registered for another client');
+    }
+
     const existing = await this.clientRepository.findByCpfCnpj(cpfCnpj.value);
     if (existing) {
       throw new ConflictError(`Client with CPF/CNPJ ${cpfCnpj.format()} already exists`);
