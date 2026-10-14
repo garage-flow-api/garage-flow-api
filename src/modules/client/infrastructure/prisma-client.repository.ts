@@ -55,4 +55,9 @@ export class PrismaClientRepository implements ClientRepository {
     });
     return ClientMapper.toDomain(raw);
   }
+
+  async findByPhone(phone: string): Promise<ClientEntity | null> {
+    const raw = await this.db.client.findUnique({ where: { phone } });
+    return raw ? ClientMapper.toDomain(raw) : null; // use o mesmo mapper do findByCpfCnpj
+  }
 }
