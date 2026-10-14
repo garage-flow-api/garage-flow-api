@@ -31,39 +31,50 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const request = ctx.getRequest<Request>();
 
     if (exception instanceof HttpException) {
-      const status = exception.getStatus();
-      const message = this.getHttpExceptionMessage(exception);
+      this.handleHttpException(exception, request, response);
+    } else if (exception instanceof DomainError) {
+      this.handleDomainError(exception, request, response);
+    } else {
+      this.handleUnexpectedError(exception, request, response);
+    }
+  }
 
-      if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
-        this.logger.error(`${request.method} ${request.url} - ${status}`, exception.stack);
-      } else {
-        this.logger.warn(
-          `${request.method} ${request.url} - ${status} - ${JSON.stringify(message)}`,
-        );
-      }
+  private handleHttpException(
+    exception: HttpException,
+    request: Request,
+    response: Response,
+  ): void {
+    const status = exception.getStatus();
+    const message = this.getHttpExceptionMessage(exception);
 
-      response.status(status).json(this.createResponse(status, message, request));
-      return;
+    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+      this.logger.error(`${request.method} ${request.url} - ${status}`, exception.stack);
+    } else {
+      this.logger.warn(`${request.method} ${request.url} - ${status} - ${JSON.stringify(message)}`);
     }
 
-    if (exception instanceof DomainError) {
-      const status = this.statusFor(exception);
-      this.logger.warn(
-        `${request.method} ${request.url} - ${status} - ${exception.name}: ${exception.message}`,
-      );
-      response.status(status).json(this.createResponse(status, exception.message, request));
-      return;
-    }
+    response.status(status).json(this.createResponse(status, message, request));
+  }
+
+  private handleDomainError(error: DomainError, request: Request, response: Response): void {
+    const status = this.statusFor(error);
+
+    this.logger.warn(
+      `${request.method} ${request.url} - ${status} - ${error.name}: ${error.message}`,
+    );
+
+    response.status(status).json(this.createResponse(status, error.message, request));
+  }
+
+  private handleUnexpectedError(exception: unknown, request: Request, response: Response): void {
+    const status = HttpStatus.INTERNAL_SERVER_ERROR;
 
     this.logger.error(
       `${request.method} ${request.url} - Unexpected exception`,
       exception instanceof Error ? exception.stack : undefined,
     );
-    response
-      .status(HttpStatus.INTERNAL_SERVER_ERROR)
-      .json(
-        this.createResponse(HttpStatus.INTERNAL_SERVER_ERROR, 'Internal server error', request),
-      );
+
+    response.status(status).json(this.createResponse(status, 'Internal server error', request));
   }
 
   private getHttpExceptionMessage(exception: HttpException): string | string[] {
