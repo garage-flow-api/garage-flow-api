@@ -14,9 +14,15 @@ require_cloud_cli
 
 if [[ ! -f "${STACK_DIR}/backend.hcl" ]]; then
   log "Criando o state remoto (bootstrap) para ${CLOUD}"
+  bootstrap_vars=(-var="environment=${ENVIRONMENT}")
+  if [[ "${CLOUD}" == "azure" ]]; then
+    # Mesma região do ambiente: assinaturas de estudante restringem regiões por policy.
+    bootstrap_vars+=(-var="location=$(tfvars_value location)")
+  else
+    bootstrap_vars+=(-var="aws_region=$(tfvars_value aws_region)")
+  fi
   terraform -chdir="${STACK_DIR}/bootstrap" init -input=false
-  terraform -chdir="${STACK_DIR}/bootstrap" apply -input=false -auto-approve \
-    -var="environment=${ENVIRONMENT}"
+  terraform -chdir="${STACK_DIR}/bootstrap" apply -input=false -auto-approve "${bootstrap_vars[@]}"
 fi
 
 log "Inicializando a stack ${CLOUD}/${ENVIRONMENT}"

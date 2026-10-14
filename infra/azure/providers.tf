@@ -6,8 +6,18 @@ provider "azurerm" {
     }
   }
 
-  # null = usa ARM_SUBSCRIPTION_ID ou a assinatura ativa no `az login`.
+  # null = usa ARM_SUBSCRIPTION_ID (exportada por infra/scripts/lib.sh).
   subscription_id = var.subscription_id
+
+  # O modo padrão ("legacy") tenta registrar dezenas de resource providers e costuma falhar em
+  # assinaturas Azure for Students. Registra apenas o conjunto básico + o que esta stack usa.
+  resource_provider_registrations = "core"
+  resource_providers_to_register = [
+    "Microsoft.ContainerService",
+    "Microsoft.ContainerRegistry",
+    "Microsoft.DBforPostgreSQL",
+    "Microsoft.KeyVault",
+  ]
 }
 
 # Kubernetes e Helm autenticam com o certificado de cliente emitido pelo AKS.

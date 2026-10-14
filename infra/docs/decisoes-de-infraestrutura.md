@@ -75,7 +75,7 @@ O ambiente-alvo impõe restrições que orientam quase todas as decisões abaixo
 
 **Contexto.** O enunciado exige deploy via manifestos Kubernetes com HPA. Os manifestos já existem e foram validados no Kubernetes do Docker Desktop.
 
-**Decisão.** **Amazon EKS** com managed node group (2× `t3.medium`, AL2023) na AWS e **AKS tier Free** (2× `Standard_B2s`) na Azure. A versão do Kubernetes é parametrizada, e o EKS usa `upgrade_policy = STANDARD` para não entrar em extended support.
+**Decisão.** **Amazon EKS** com managed node group (2× `t3.medium`, AL2023) na AWS e **AKS tier Free** (2× `Standard_B2als_v2`) na Azure. A versão do Kubernetes é parametrizada, e o EKS usa `upgrade_policy = STANDARD` para não entrar em extended support.
 
 **Motivo principal.** Kubernetes gerenciado elimina a operação do control plane (etcd, upgrades, alta disponibilidade) e é suportado nos dois ambientes acadêmicos. O EKS aceita a `LabRole` como role do cluster e dos nodes.
 

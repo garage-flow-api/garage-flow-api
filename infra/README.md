@@ -80,7 +80,7 @@ flowchart TB
 
         subgraph vnet[VNet 10.20.0.0/16]
             lb[Azure Load Balancer]
-            subgraph aks[AKS Free · 2× Standard_B2s]
+            subgraph aks[AKS Free · 2× Standard_B2als_v2]
                 ingress[NGINX Ingress Controller]
                 api[Pods da API<br/>HPA 1-10 réplicas]
                 jobs[Jobs<br/>migration · bootstrap admin]
@@ -147,7 +147,8 @@ infra/
 └── scripts/
     ├── provision.sh                   # bootstrap + terraform apply
     ├── deploy-app.sh                  # imagens + Jobs + manifestos
-    └── destroy.sh                     # remoção ordenada
+    ├── destroy.sh                     # remoção ordenada
+    └── setup-azure.sh                 # wizard de configuração da Azure
 ```
 
 ## Recursos provisionados
@@ -179,7 +180,7 @@ infra/
 | Resource Group | `rg-garage-flow-staging` | Agrupamento e remoção em bloco |
 | VNet | `10.20.0.0/16` com subnets `snet-aks` e `snet-postgres` (delegada) | Rede isolada |
 | Private DNS Zone | `garage-flow-staging.private.postgres.database.azure.com` | Resolução privada do banco |
-| AKS | tier Free, 2× `Standard_B2s`, Azure CNI Overlay, Managed Identity | Cluster Kubernetes gerenciado |
+| AKS | tier Free, 2× `Standard_B2als_v2` (2 vCPU / 4 GiB), Azure CNI Overlay, Managed Identity | Cluster Kubernetes gerenciado |
 | Role assignments | `Network Contributor` (subnet), `AcrPull` (ACR) | Permissões da identidade do AKS |
 | PostgreSQL Flexible Server | 16, `B_Standard_B1ms`, 32 GiB, acesso privado | Banco de dados da aplicação |
 | ACR | Basic, sem usuário admin | Registry das imagens |
@@ -259,27 +260,55 @@ Em `infra/aws/environments/staging.tfvars`:
 
 ## Provisionamento na Azure
 
-### 1. Credenciais
+### Caminho recomendado: wizard
+
+```bash
+infra/scripts/setup-azure.sh
+```
+
+O wizard conduz a configuração em 8 etapas e pode ser executado novamente sem perder as escolhas:
+
+| Etapa | O que acontece | Onde o resultado fica |
+| --- | --- | --- |
+| 1. Ferramentas | Confere `terraform`, `az`, `kubectl` e Docker | — |
+| 2. Login | `az login` no navegador, com a conta da universidade | Sessão do az CLI |
+| 3. Assinatura | Lista as assinaturas e ativa a escolhida (Azure for Students) | `ARM_SUBSCRIPTION_ID` em `infra/azure/.env.azure` |
+| 4. Serviços | Registra os resource providers usados pela stack | Assinatura Azure |
+| 5. Região | Mostra as regiões permitidas pela policy e verifica a VM dos nodes, a quota de vCPUs e o SKU do PostgreSQL | `location` em `environments/staging.tfvars` |
+| 6. Validação | `terraform init -backend=false` + `terraform validate` | — |
+| 7. Provisionar | `provision.sh azure` (opcional, com confirmação) | Recursos na Azure |
+| 8. Deploy | `deploy-app.sh azure` (opcional, requer Docker em execução) | Aplicação no AKS |
+
+`infra/azure/.env.azure` é ignorado pelo Git e carregado automaticamente pelos scripts (`lib.sh`). Assim, `provision.sh`, `deploy-app.sh` e `destroy.sh` sempre usam a assinatura escolhida, mesmo que outra esteja ativa no az CLI.
+
+<details>
+<summary>Configuração manual, sem o wizard</summary>
 
 ```bash
 az login
 az account set --subscription "<nome-ou-id-da-assinatura>"
 export ARM_SUBSCRIPTION_ID="$(az account show --query id --output tsv)"
-```
 
-Assinaturas novas podem exigir o registro dos resource providers (execução única):
+for ns in Microsoft.ContainerService Microsoft.ContainerRegistry Microsoft.DBforPostgreSQL Microsoft.KeyVault Microsoft.Network Microsoft.Compute Microsoft.Storage Microsoft.ManagedIdentity; do
+  az provider register --namespace "$ns" --wait
+done
 
-```bash
-for ns in Microsoft.ContainerService Microsoft.DBforPostgreSQL Microsoft.ContainerRegistry Microsoft.KeyVault Microsoft.Network; do az provider register --namespace "$ns"; done
-```
+# Regiões permitidas pela policy da assinatura (Azure for Students)
+az policy assignment list --disable-scope-strict-match --query "[].parameters.listOfAllowedLocations.value[]" --output tsv
 
-Assinaturas **Azure for Students** podem restringir regiões por policy. Se o apply falhar com `RequestDisallowedByPolicy`, troque `location` em `infra/azure/environments/staging.tfvars` e em `infra/azure/bootstrap` (variável `location`).
-
-### 2. Provisionar
-
-```bash
 infra/scripts/provision.sh azure
 ```
+
+A região é definida em `location`, em `infra/azure/environments/staging.tfvars`. O `provision.sh` usa o mesmo valor para criar o state remoto (bootstrap).
+
+</details>
+
+### Particularidades da Azure for Students
+
+- **Regiões:** a policy da assinatura limita onde recursos podem ser criados. Um erro `RequestDisallowedByPolicy` indica uma região fora da lista.
+- **Quota de vCPUs:** a stack usa 2 nodes `Standard_B2als_v2` (4 vCPUs) e precisa de mais 2 vCPUs livres para upgrades do AKS. O wizard confere a quota na etapa 5.
+- **Resource providers:** o provider `azurerm` registra apenas o conjunto básico mais os serviços da stack (`resource_provider_registrations = "core"`). O modo padrão tenta registrar dezenas de serviços e costuma falhar nesse tipo de assinatura.
+- **Créditos:** a assinatura é desativada quando os créditos acabam. Execute `infra/scripts/destroy.sh azure` ao terminar cada sessão.
 
 ## Deploy da aplicação
 
@@ -380,14 +409,14 @@ Valores on-demand aproximados, apenas para referência de consumo dos créditos.
 | IPv4 públicos (nodes + NLB) | ~0,02 |
 | **Total** | **~0,25 (~US$ 6/dia)** |
 
-| Azure (eastus2) | US$/hora |
+| Azure (northcentralus) | US$/hora |
 | --- | --- |
 | AKS control plane (Free) | 0,00 |
-| 2× Standard_B2s | ~0,083 |
+| 2× Standard_B2als_v2 | ~0,075 |
 | PostgreSQL B_Standard_B1ms + 32 GiB | ~0,02 |
 | Standard Load Balancer + IP público | ~0,03 |
 | ACR Basic | ~0,007 |
-| **Total** | **~0,14 (~US$ 3,5/dia)** |
+| **Total** | **~0,13 (~US$ 3/dia)** |
 
 ## Solução de problemas
 

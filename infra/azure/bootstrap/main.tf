@@ -23,8 +23,11 @@ terraform {
 provider "azurerm" {
   features {}
 
-  # null = usa ARM_SUBSCRIPTION_ID ou a assinatura ativa no `az login`.
+  # null = usa ARM_SUBSCRIPTION_ID (exportada por infra/scripts/lib.sh).
   subscription_id = var.subscription_id
+
+  # Registra apenas o conjunto básico (inclui Microsoft.Storage); ver infra/azure/providers.tf.
+  resource_provider_registrations = "core"
 }
 
 # Storage Accounts exigem nome globalmente único (3-24 caracteres minúsculos/números).

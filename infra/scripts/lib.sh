@@ -31,6 +31,24 @@ parse_cloud() {
   esac
   STACK_DIR="${INFRA_DIR}/${CLOUD}"
   export CLOUD STACK_DIR
+  load_cloud_env
+}
+
+# Carrega infra/<cloud>/.env.<cloud> (ignorado pelo Git), gerado por setup-azure.sh.
+# Ex.: ARM_SUBSCRIPTION_ID da assinatura Azure escolhida no wizard.
+load_cloud_env() {
+  local env_file="${STACK_DIR}/.env.${CLOUD}"
+  if [[ -f "${env_file}" ]]; then
+    set -a
+    # shellcheck source=/dev/null
+    source "${env_file}"
+    set +a
+  fi
+}
+
+# Lê um valor string de environments/<ENVIRONMENT>.tfvars (ex.: tfvars_value location).
+tfvars_value() {
+  sed -n "s/^${1}[[:space:]]*=[[:space:]]*\"\(.*\)\".*/\1/p" "${STACK_DIR}/$(tf_var_file)" | head -n 1
 }
 
 require_cloud_cli() {
@@ -40,7 +58,18 @@ require_cloud_cli() {
       fail "Credenciais AWS inválidas ou expiradas. No Learner Lab, copie novamente 'AWS Details' para ~/.aws/credentials."
   else
     require_cmd az
-    az account show >/dev/null 2>&1 || fail "Sessão Azure inexistente. Execute 'az login'."
+    az account show >/dev/null 2>&1 ||
+      fail "Sessão Azure inexistente. Execute 'az login' ou infra/scripts/setup-azure.sh."
+
+    # O provider azurerm 4.x exige a assinatura explícita (ARM_SUBSCRIPTION_ID).
+    # Sem valor configurado, usa a assinatura ativa no az CLI; com valor, alinha o az CLI a ela.
+    if [[ -n "${ARM_SUBSCRIPTION_ID:-}" ]]; then
+      az account set --subscription "${ARM_SUBSCRIPTION_ID}" >/dev/null 2>&1 ||
+        fail "Assinatura ${ARM_SUBSCRIPTION_ID} inacessível para o usuário logado no az CLI."
+    else
+      ARM_SUBSCRIPTION_ID="$(az account show --query id --output tsv)"
+    fi
+    export ARM_SUBSCRIPTION_ID
   fi
 }
 

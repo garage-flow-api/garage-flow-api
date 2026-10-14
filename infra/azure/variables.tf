@@ -38,9 +38,9 @@ variable "kubernetes_version" {
 }
 
 variable "node_vm_size" {
-  description = "Tamanho das VMs do node pool (B2s: 2 vCPU / 4 GiB, equivalente ao t3.medium)."
+  description = "Tamanho das VMs do node pool (B2als_v2: 2 vCPU AMD / 4 GiB, equivalente ao t3.medium)."
   type        = string
-  default     = "Standard_B2s"
+  default     = "Standard_B2als_v2"
 }
 
 variable "node_count" {
