@@ -362,15 +362,28 @@ pause
 
 # ── 3 ─────────────────────────────────────────────────────────────────────
 stage "Assinatura"
-say "Assinaturas disponíveis para esta conta:"
-az account list --query "[].{Nome:name, ID:id, Estado:state, Atual:isDefault}" --output table | sed 's/^/    /'
-note "Use a assinatura 'Azure for Students' (Estado = Enabled)."
-note "Sem nenhuma? Ative em https://azure.microsoft.com/free/students com o e-mail da universidade."
-until ask ARM_SUBSCRIPTION_ID "ID da assinatura (Enter usa a Atual):" &&
-  { [[ -n "$ARM_SUBSCRIPTION_ID" ]] || ARM_SUBSCRIPTION_ID=$(az account show --query id --output tsv); } &&
-  az account set --subscription "$ARM_SUBSCRIPTION_ID" >/dev/null 2>&1; do
-  warn "Assinatura inválida ou inacessível. Copie o ID da tabela acima."
-done
+pinned_subscription=$(tfvars_get subscription_id)
+if [[ -n "$pinned_subscription" ]]; then
+  # Assinatura do grupo fixada no tfvars: não pergunta, só confere o acesso.
+  say "Assinatura fixada em ${TFVARS}: ${BOLD}${pinned_subscription}${RESET}"
+  if ! az account set --subscription "$pinned_subscription" >/dev/null 2>&1; then
+    warn "Sua conta não tem acesso a essa assinatura."
+    note "Peça ao dono da assinatura uma role no IAM (ver infra/README.md, 'Acesso do grupo')."
+    note "Para usar outra assinatura, veja infra/README.md, 'Trocar a assinatura Azure'."
+    exit 1
+  fi
+  ARM_SUBSCRIPTION_ID="$pinned_subscription"
+else
+  say "Assinaturas disponíveis para esta conta:"
+  az account list --query "[].{Nome:name, ID:id, Estado:state, Atual:isDefault}" --output table | sed 's/^/    /'
+  note "Use a assinatura 'Azure for Students' (Estado = Enabled)."
+  note "Sem nenhuma? Ative em https://azure.microsoft.com/free/students com o e-mail da universidade."
+  until ask ARM_SUBSCRIPTION_ID "ID da assinatura (Enter usa a Atual):" &&
+    { [[ -n "$ARM_SUBSCRIPTION_ID" ]] || ARM_SUBSCRIPTION_ID=$(az account show --query id --output tsv); } &&
+    az account set --subscription "$ARM_SUBSCRIPTION_ID" >/dev/null 2>&1; do
+    warn "Assinatura inválida ou inacessível. Copie o ID da tabela acima."
+  done
+fi
 write_env ARM_SUBSCRIPTION_ID "$ARM_SUBSCRIPTION_ID"
 say "${GREEN}✓${RESET} Assinatura ativa: $(az account show --query name --output tsv)"
 

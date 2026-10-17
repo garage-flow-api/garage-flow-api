@@ -14,6 +14,7 @@ As justificativas de cada escolha, com prós, contras e alternativas descartadas
 - [Provisionamento na AWS (Learner Lab)](#provisionamento-na-aws-learner-lab)
 - [Provisionamento na Azure](#provisionamento-na-azure)
 - [Acesso do grupo à assinatura Azure](#acesso-do-grupo-à-assinatura-azure)
+- [Trocar a assinatura Azure](#trocar-a-assinatura-azure)
 - [Deploy da aplicação](#deploy-da-aplicação)
 - [Remoção da infraestrutura](#remoção-da-infraestrutura)
 - [Contrato para o pipeline de CI/CD](#contrato-para-o-pipeline-de-cicd)
@@ -325,9 +326,20 @@ A stack Azure roda na assinatura de um membro. Os demais membros e o pipeline us
    az ad signed-in-user show --query id --output tsv
    ```
 
-3. **Membro:** executa `infra/scripts/setup-azure.sh` com a própria conta e escolhe a assinatura do grupo. O `infra/azure/backend.hcl` versionado garante que todos usem o mesmo state remoto.
+3. **Membro:** executa `infra/scripts/setup-azure.sh` com a própria conta. A assinatura do grupo está fixada (ver abaixo), então o wizard não pergunta qual usar; só confere se a conta tem acesso. O `infra/azure/backend.hcl` versionado garante que todos usem o mesmo state remoto.
 
 O Key Vault usa **Azure RBAC**: ser `Owner` da assinatura não dá leitura dos secrets. Quem precisar consultar o cofre (por exemplo, a senha do admin) deve estar em `secrets_officer_object_ids`. Quem executa o Terraform recebe o acesso automaticamente, mas, se não estiver na lista, o perde no próximo `apply` de outra pessoa.
+
+### Assinatura fixada
+
+A assinatura do grupo está fixada em dois arquivos versionados:
+
+| Arquivo | Campo | Efeito |
+| --- | --- | --- |
+| `infra/azure/environments/staging.tfvars` | `subscription_id` | Onde o Terraform cria os recursos |
+| `infra/azure/backend.hcl` | `subscription_id` | Onde fica o state remoto |
+
+Com isso, os recursos são sempre criados nessa assinatura, independente da conta logada ou da assinatura ativa no az CLI. Os scripts (`lib.sh`) também apontam o az CLI para ela, para que `az acr login`, `az aks get-credentials` e `az keyvault` usem a mesma assinatura. Quem não tem role na assinatura recebe erro de acesso; nada é criado em outra assinatura.
 
 ### Pipeline (GitHub Actions)
 
@@ -355,6 +367,18 @@ Para outros gatilhos (pull requests, tags, GitHub Environments), cadastre uma cr
 ```bash
 az ad app federated-credential create --id <app-object-id> --parameters '{"name":"github-pr","issuer":"https://token.actions.githubusercontent.com","subject":"repo:garage-flow-api/garage-flow-api:pull_request","audiences":["api://AzureADTokenExchange"]}'
 ```
+
+## Trocar a assinatura Azure
+
+Para usar outra assinatura (por exemplo, a Azure for Students de outro membro):
+
+1. Em `infra/azure/environments/staging.tfvars`, troque `subscription_id` pelo ID da nova assinatura. Para voltar ao comportamento sem assinatura fixada, comente a linha; o wizard volta a perguntar qual usar.
+2. Apague `infra/azure/backend.hcl`. O próximo `infra/scripts/provision.sh azure` executa o bootstrap na nova assinatura, cria outro state remoto e gera um novo `backend.hcl`, já com o `subscription_id` correto.
+3. Em `secrets_officer_object_ids`, mantenha só quem tem acesso à nova assinatura. Se o pipeline for usado, crie um service principal na nova assinatura (ver [Pipeline](#pipeline-github-actions)) e substitua o object ID dele.
+4. Execute `infra/scripts/setup-azure.sh` (registra os resource providers e valida a região na nova assinatura) e depois `infra/scripts/provision.sh azure`.
+5. Versione o `staging.tfvars` e o novo `backend.hcl` para o restante do grupo.
+
+> Antes de trocar, rode `infra/scripts/destroy.sh azure` na assinatura atual. O state antigo continua na assinatura anterior; os recursos dela não são migrados nem removidos automaticamente.
 
 ## Deploy da aplicação
 

@@ -72,11 +72,15 @@ resource "azurerm_storage_container" "state" {
   container_access_type = "private"
 }
 
+data "azurerm_client_config" "current" {}
+
 # Gera o arquivo consumido por `terraform init -backend-config=backend.hcl` na stack principal.
+# subscription_id fixa o state na assinatura onde o bootstrap rodou.
 resource "local_file" "backend_config" {
   filename        = "${path.module}/../backend.hcl"
   file_permission = "0644"
   content         = <<-EOT
+    subscription_id      = "${data.azurerm_client_config.current.subscription_id}"
     resource_group_name  = "${azurerm_resource_group.state.name}"
     storage_account_name = "${azurerm_storage_account.state.name}"
     container_name       = "${azurerm_storage_container.state.name}"

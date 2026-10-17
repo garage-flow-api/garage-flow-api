@@ -1,7 +1,9 @@
-# Ambiente de staging na assinatura Azure for Students.
-# subscription_id = "00000000-0000-0000-0000-000000000000"  # ou exporte ARM_SUBSCRIPTION_ID
-location    = "northcentralus"
-environment = "staging"
+# Ambiente de staging na assinatura Azure for Students do grupo.
+# Fixada: todos os membros e o pipeline criam recursos nesta assinatura, independente da
+# assinatura ativa no az CLI. Para usar outra, veja infra/README.md ("Trocar a assinatura Azure").
+subscription_id = "431af8e3-d217-4987-ac21-bee6311184f9"
+location        = "northcentralus"
+environment     = "staging"
 
 node_vm_size = "Standard_B2als_v2"
 node_count   = 2

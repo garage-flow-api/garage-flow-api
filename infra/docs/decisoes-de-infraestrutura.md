@@ -482,6 +482,7 @@ O metrics-server é instalado como add-on do EKS; no AKS ele já vem nativo. Nã
 2. **Key Vault em modo RBAC** (`rbac_authorization_enabled = true`). Cada identidade da lista `secrets_officer_object_ids` (`environments/<ambiente>.tfvars`) recebe `Key Vault Secrets Officer` no cofre, além de quem executa o Terraform. Um `time_sleep` de 60 s aguarda a propagação do RBAC antes de gravar os secrets.
 3. **Pipeline:** service principal `sp-garage-flow-github-actions` com credencial federada (OIDC) restrita a `repo:garage-flow-api/garage-flow-api:ref:refs/heads/main`, com `Contributor` + `Role Based Access Control Administrator` na assinatura. O pipeline autentica com `ARM_USE_OIDC=true`, `ARM_CLIENT_ID`, `ARM_TENANT_ID` e `ARM_SUBSCRIPTION_ID`, sem segredo armazenado no GitHub.
 4. **State compartilhado:** `infra/azure/backend.hcl` é versionado (contém apenas nomes), para que todos usem o mesmo state remoto. Na AWS o arquivo continua local, porque cada membro usa o próprio Learner Lab.
+5. **Assinatura fixada:** `subscription_id` é versionado no `staging.tfvars` e no `backend.hcl`. Recursos e state ficam sempre na assinatura do grupo, mesmo que outra esteja ativa no az CLI. A troca é documentada no README da infra ("Trocar a assinatura Azure").
 
 **Motivo principal.** Nenhuma credencial pessoal é compartilhada, e qualquer membro ou o pipeline pode aplicar a stack sem tirar o acesso dos demais.
 

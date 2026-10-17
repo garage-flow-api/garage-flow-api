@@ -70,7 +70,16 @@ require_cloud_cli() {
       fail "Sessão Azure inexistente. Execute 'az login' ou infra/scripts/setup-azure.sh."
 
     # O provider azurerm 4.x exige a assinatura explícita (ARM_SUBSCRIPTION_ID).
-    # Sem valor configurado, usa a assinatura ativa no az CLI; com valor, alinha o az CLI a ela.
+    # Prioridade: subscription_id do tfvars (assinatura fixada do grupo) > .env.azure > az CLI.
+    # Com valor, alinha o az CLI a ela, para que az acr/aks/keyvault usem a mesma assinatura.
+    local pinned_subscription
+    pinned_subscription="$(tfvars_value subscription_id)"
+    if [[ -n "${pinned_subscription}" ]]; then
+      if [[ -n "${ARM_SUBSCRIPTION_ID:-}" && "${ARM_SUBSCRIPTION_ID}" != "${pinned_subscription}" ]]; then
+        warn "Usando a assinatura fixada em $(tf_var_file) (${pinned_subscription}), não ${ARM_SUBSCRIPTION_ID}."
+      fi
+      ARM_SUBSCRIPTION_ID="${pinned_subscription}"
+    fi
     if [[ -n "${ARM_SUBSCRIPTION_ID:-}" ]]; then
       az account set --subscription "${ARM_SUBSCRIPTION_ID}" >/dev/null 2>&1 ||
         fail "Assinatura ${ARM_SUBSCRIPTION_ID} inacessível para o usuário logado no az CLI."
