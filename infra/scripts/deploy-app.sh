@@ -62,6 +62,19 @@ images:
     newName: ${MIGRATION_REPOSITORY}
     newTag: "${IMAGE_TAG}"
 YAML
+  # O F5 NGINX Ingress Controller rejeita Ingress sem host (spec.rules[0].host: Required value).
+  if [[ "${overlay}" == "cloud" ]]; then
+    cat >>"${target}/kustomization.yaml" <<YAML
+patches:
+  - target:
+      kind: Ingress
+      name: garage-flow-ingress
+    patch: |-
+      - op: add
+        path: /spec/rules/0/host
+        value: "${INGRESS_HOST}"
+YAML
+  fi
   echo "${target}"
 }
 
@@ -91,17 +104,26 @@ run_job cloud-bootstrap-admin garage-flow-bootstrap-admin
 # ---------------------------------------------------------------------------
 # 4. API: ConfigMap, Deployment, Service, Ingress e HPA
 # ---------------------------------------------------------------------------
-log "Aplicando manifestos da API"
+ADDRESS="$(kubectl get service -n "${INGRESS_NAMESPACE}" \
+  -o jsonpath='{range .items[?(@.spec.type=="LoadBalancer")]}{.status.loadBalancer.ingress[0].hostname}{.status.loadBalancer.ingress[0].ip}{end}')"
+[[ -n "${ADDRESS}" ]] || fail "Load Balancer do Ingress Controller ainda sem endereço público."
+
+# Host do Ingress: na AWS o NLB já tem hostname; na Azure o LB só tem IP, então usa o
+# DNS curinga nip.io (<ip>.nip.io resolve para <ip>), sem precisar de domínio próprio.
+if [[ "${ADDRESS}" =~ ^[0-9.]+$ ]]; then
+  INGRESS_HOST="${ADDRESS}.nip.io"
+else
+  INGRESS_HOST="${ADDRESS}"
+fi
+
+log "Aplicando manifestos da API (host ${INGRESS_HOST})"
 kubectl apply -k "$(render_overlay cloud)"
 kubectl rollout status deployment/garage-flow-deployment --timeout=300s
 
-ADDRESS="$(kubectl get service -n "${INGRESS_NAMESPACE}" \
-  -o jsonpath='{range .items[?(@.spec.type=="LoadBalancer")]}{.status.loadBalancer.ingress[0].hostname}{.status.loadBalancer.ingress[0].ip}{end}')"
-
 log "Deploy concluído (imagem ${IMAGE_TAG})"
-echo "  API:     http://${ADDRESS}"
-echo "  Swagger: http://${ADDRESS}/docs"
-echo "  Health:  http://${ADDRESS}/health"
+echo "  API:     http://${INGRESS_HOST}"
+echo "  Swagger: http://${INGRESS_HOST}/docs"
+echo "  Health:  http://${INGRESS_HOST}/health"
 echo "  Senha do admin: $(tf_output secrets_read_command)"
 [[ "${CLOUD}" == "aws" ]] && warn "O DNS do Load Balancer da AWS pode levar alguns minutos para propagar."
 exit 0

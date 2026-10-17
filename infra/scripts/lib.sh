@@ -8,6 +8,14 @@ INFRA_DIR="$(cd "${SCRIPTS_DIR}/.." && pwd)"
 REPO_ROOT="$(cd "${INFRA_DIR}/.." && pwd)"
 ENVIRONMENT="${ENVIRONMENT:-staging}"
 
+# Mesmo modo de login do setup-azure.sh: navegador em vez do WAM do Windows.
+export AZURE_CORE_ENABLE_BROKER_ON_WINDOWS=false
+
+# Git Bash: remove o \r (CRLF) da saída do az, como em setup-azure.sh.
+if [[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]]; then
+  az() { command az "$@" | tr -d '\r'; }
+fi
+
 log() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[aviso]\033[0m %s\n' "$*" >&2; }
 fail() {

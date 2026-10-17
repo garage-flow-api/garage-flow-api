@@ -208,6 +208,16 @@ TOTAL_STAGES=8
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
+# No Windows, o az CLI usa por padrão o WAM (janela de contas do sistema), que nem sempre
+# conclui o login. Desligado, o `az login` abre a página da Microsoft no navegador.
+export AZURE_CORE_ENABLE_BROKER_ON_WINDOWS=false
+
+# No Git Bash, o az (programa Windows) termina as linhas com CRLF: o \r quebra comparações
+# e IDs capturados com $(az ...). Remove o \r de toda a saída do az.
+if [[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]]; then
+  az() { command az "$@" | tr -d '\r'; }
+fi
+
 # Valores lembrados entre execuções (ignorado pelo Git); carregado por infra/scripts/lib.sh.
 ENV_FILE="infra/azure/.env.azure"
 TFVARS="infra/azure/environments/${ENVIRONMENT:-staging}.tfvars"
@@ -292,7 +302,11 @@ ${usage}
 USAGE
 
   # 3. PostgreSQL Flexible Server com o SKU configurado.
-  if az postgres flexible-server list-skus --location "$loc" --output json 2>/dev/null | grep -q "Standard_B1ms"; then
+  # Captura antes do grep: com `| grep -q` direto, o grep fecha o pipe no primeiro match,
+  # o az recebe SIGPIPE e o pipefail transforma o sucesso em falha.
+  local pg_skus
+  pg_skus=$(az postgres flexible-server list-skus --location "$loc" --output json 2>/dev/null || true)
+  if grep -q '"Standard_B1ms"' <<<"$pg_skus"; then
     say "${GREEN}✓${RESET} PostgreSQL Flexible Server (B1ms) disponível"
   else
     warn "PostgreSQL Flexible Server B1ms indisponível ou restrito em ${loc}."
