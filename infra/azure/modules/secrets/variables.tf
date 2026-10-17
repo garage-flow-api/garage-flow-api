@@ -16,3 +16,9 @@ variable "values" {
   type        = map(string)
   sensitive   = true
 }
+
+variable "secrets_officer_object_ids" {
+  description = "Object IDs (Entra ID) que recebem 'Key Vault Secrets Officer' no Key Vault, além de quem executa o Terraform."
+  type        = list(string)
+  default     = []
+}

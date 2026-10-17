@@ -13,6 +13,7 @@ As justificativas de cada escolha, com prós, contras e alternativas descartadas
 - [Pré-requisitos](#pré-requisitos)
 - [Provisionamento na AWS (Learner Lab)](#provisionamento-na-aws-learner-lab)
 - [Provisionamento na Azure](#provisionamento-na-azure)
+- [Acesso do grupo à assinatura Azure](#acesso-do-grupo-à-assinatura-azure)
 - [Deploy da aplicação](#deploy-da-aplicação)
 - [Remoção da infraestrutura](#remoção-da-infraestrutura)
 - [Contrato para o pipeline de CI/CD](#contrato-para-o-pipeline-de-cicd)
@@ -184,7 +185,8 @@ infra/
 | Role assignments | `Network Contributor` (subnet), `AcrPull` (ACR) | Permissões da identidade do AKS |
 | PostgreSQL Flexible Server | 16, `B_Standard_B1ms`, 32 GiB, acesso privado | Banco de dados da aplicação |
 | ACR | Basic, sem usuário admin | Registry das imagens |
-| Key Vault | soft delete 7 dias, sem purge protection | Cópia consultável dos segredos gerados |
+| Key Vault | modo RBAC, soft delete 7 dias, sem purge protection | Cópia consultável dos segredos gerados |
+| Role assignments do Key Vault | `Key Vault Secrets Officer` para `secrets_officer_object_ids` + quem executa o Terraform | Acesso de pessoas e do pipeline aos secrets |
 
 ### Dentro do cluster (ambas as clouds)
 
@@ -310,6 +312,50 @@ A região é definida em `location`, em `infra/azure/environments/staging.tfvars
 - **Resource providers:** o provider `azurerm` registra apenas o conjunto básico mais os serviços da stack (`resource_provider_registrations = "core"`). O modo padrão tenta registrar dezenas de serviços e costuma falhar nesse tipo de assinatura.
 - **Créditos:** a assinatura é desativada quando os créditos acabam. Execute `infra/scripts/destroy.sh azure` ao terminar cada sessão.
 
+## Acesso do grupo à assinatura Azure
+
+A stack Azure roda na assinatura de um membro. Os demais membros e o pipeline usam **as próprias identidades**; nenhuma credencial pessoal é compartilhada. Justificativa em [ADR-15](docs/decisoes-de-infraestrutura.md#adr-15--acesso-compartilhado-à-assinatura-azure).
+
+### Membros do grupo
+
+1. **Dono da assinatura**, no Portal: assinatura → *Controle de acesso (IAM)* → *Adicionar atribuição de função* → `Owner` (ou `Contributor` + `Role Based Access Control Administrator`) para a conta FIAP do membro. As contas FIAP já estão no tenant, então não é preciso convidar ninguém. Só `Contributor` não basta: a stack cria e remove role assignments.
+2. **Membro:** obtém o próprio object ID e o envia ao dono para entrar em `secrets_officer_object_ids`, em `infra/azure/environments/staging.tfvars`:
+
+   ```bash
+   az ad signed-in-user show --query id --output tsv
+   ```
+
+3. **Membro:** executa `infra/scripts/setup-azure.sh` com a própria conta e escolhe a assinatura do grupo. O `infra/azure/backend.hcl` versionado garante que todos usem o mesmo state remoto.
+
+O Key Vault usa **Azure RBAC**: ser `Owner` da assinatura não dá leitura dos secrets. Quem precisar consultar o cofre (por exemplo, a senha do admin) deve estar em `secrets_officer_object_ids`. Quem executa o Terraform recebe o acesso automaticamente, mas, se não estiver na lista, o perde no próximo `apply` de outra pessoa.
+
+### Pipeline (GitHub Actions)
+
+Identidade criada uma única vez pelo dono da assinatura:
+
+| Item | Valor |
+| --- | --- |
+| App registration / service principal | `sp-garage-flow-github-actions` |
+| Credencial federada | issuer `https://token.actions.githubusercontent.com`, subject `repo:garage-flow-api/garage-flow-api:ref:refs/heads/main` |
+| Roles na assinatura | `Contributor` + `Role Based Access Control Administrator` |
+| Acesso aos secrets | object ID em `secrets_officer_object_ids` |
+
+O workflow precisa de `permissions: id-token: write`, do login com `azure/login` (client ID, tenant ID e subscription ID, sem secret) e das variáveis abaixo para o Terraform. Nenhum desses IDs é segredo; podem ficar em *GitHub Variables*.
+
+```yaml
+env:
+  ARM_USE_OIDC: "true"
+  ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+```
+
+Para outros gatilhos (pull requests, tags, GitHub Environments), cadastre uma credencial federada adicional com o subject correspondente:
+
+```bash
+az ad app federated-credential create --id <app-object-id> --parameters '{"name":"github-pr","issuer":"https://token.actions.githubusercontent.com","subject":"repo:garage-flow-api/garage-flow-api:pull_request","audiences":["api://AzureADTokenExchange"]}'
+```
+
 ## Deploy da aplicação
 
 Com a infraestrutura provisionada:
@@ -394,7 +440,7 @@ Sequência de deploy esperada: a mesma de [`scripts/deploy-app.sh`](scripts/depl
 Credenciais necessárias no pipeline:
 
 - **AWS Learner Lab:** `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` e `AWS_SESSION_TOKEN`, renovados manualmente a cada sessão do laboratório. Em uma conta AWS real, prefira OIDC do GitHub Actions com uma role dedicada (ver decisão ADR-04).
-- **Azure:** service principal ou federated credential (OIDC) com acesso à assinatura (`ARM_CLIENT_ID`, `ARM_TENANT_ID`, `ARM_SUBSCRIPTION_ID`).
+- **Azure:** service principal `sp-garage-flow-github-actions` com credencial federada (OIDC), sem client secret (`ARM_USE_OIDC=true`, `ARM_CLIENT_ID`, `ARM_TENANT_ID`, `ARM_SUBSCRIPTION_ID`). Ver [Acesso do grupo à assinatura Azure](#acesso-do-grupo-à-assinatura-azure).
 
 ## Custos estimados
 

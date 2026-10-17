@@ -41,6 +41,7 @@ O ambiente-alvo impõe restrições que orientam quase todas as decisões abaixo
 | [ADR-12](#adr-12--capacidade-e-escalabilidade) | Capacidade | Node pool fixo (2 nodes) + HPA de pods |
 | [ADR-13](#adr-13--ambientes-e-ciclo-de-vida) | Ambientes e ciclo de vida | Ambiente único `staging`, infraestrutura efêmera |
 | [ADR-14](#adr-14--fronteira-entre-terraform-e-cicd) | Fronteira Terraform × CI/CD | Terraform provisiona infra e plataforma; deploy da aplicação por scripts/pipeline |
+| [ADR-15](#adr-15--acesso-compartilhado-à-assinatura-azure) | Acesso compartilhado (Azure) | Contas individuais com RBAC na assinatura, Key Vault em modo RBAC, service principal com OIDC para o pipeline |
 
 ---
 
@@ -147,7 +148,7 @@ Mapeamento das roles para uma conta AWS real:
 | `<nome>-eks-node` | `ec2.amazonaws.com` | `AmazonEKSWorkerNodePolicy`, `AmazonEKS_CNI_Policy`, `AmazonEC2ContainerRegistryReadOnly` | Nodes: registro no cluster, rede dos pods, pull de imagens |
 | GitHub Actions *(documentada, não implementada)* | OIDC `token.actions.githubusercontent.com`, restrita ao repositório | ECR push, `eks:DescribeCluster` + access entry no cluster | Pipeline sem access keys de longa duração |
 
-Na Azure, o equivalente é a **Managed Identity** do AKS (criada pelo próprio serviço), com `Network Contributor` na subnet e `AcrPull` no registry.
+Na Azure, o equivalente é a **Managed Identity** do AKS (criada pelo próprio serviço), com `Network Contributor` na subnet e `AcrPull` no registry. O acesso de pessoas e do pipeline à assinatura está no ADR-15.
 
 **Motivo principal.** Um único código serve ao laboratório e a uma conta real, e a limitação fica explícita em vez de embutida.
 
@@ -243,7 +244,7 @@ O metrics-server é instalado como add-on do EKS; no AKS ele já vem nativo. Nã
 
 **Decisão.**
 1. O Terraform gera os valores com `random_password`: senha do banco, `JWT_SECRET`, `TRACKING_TOKEN_SECRET` e senha do primeiro administrador. São apenas alfanuméricos, para dispensar URL-encoding na `DATABASE_URL`.
-2. Os valores são replicados no **AWS Secrets Manager** (`garage-flow/staging/app`) ou no **Azure Key Vault**, que servem como fonte de consulta para pessoas e integrações.
+2. Os valores são replicados no **AWS Secrets Manager** (`garage-flow/staging/app`) ou no **Azure Key Vault**, que servem como fonte de consulta para pessoas e integrações. Na Azure, o acesso ao Key Vault é controlado por Azure RBAC (ver ADR-15).
 3. O Terraform cria os Secrets Kubernetes `garage-flow-secrets` e `garage-flow-bootstrap-admin` com as mesmas chaves dos manifestos.
 4. Os overlays de cloud removem os Secrets versionados.
 
@@ -469,6 +470,40 @@ O metrics-server é instalado como add-on do EKS; no AKS ele já vem nativo. Nã
 | --- | --- |
 | Terraform também aplicando a aplicação | Todo release vira um `terraform apply`, lento e com risco de alterações de infraestrutura indesejadas |
 | Implementar o pipeline nesta entrega | Responsabilidade de outro membro do grupo |
+
+---
+
+## ADR-15 — Acesso compartilhado à assinatura Azure
+
+**Contexto.** A stack Azure roda em uma única assinatura Azure for Students, de um membro do grupo, no tenant da FIAP. Os demais membros e o pipeline de CI/CD (ADR-14) precisam provisionar e fazer deploy nessa assinatura. Na primeira versão, o Key Vault usava *access policies*: o bloco `access_policy` concedia acesso apenas ao `object_id` de quem executava o Terraform e era tratado como lista completa, então cada `apply` removia o acesso de quem aplicou antes.
+
+**Decisão.**
+1. **Pessoas:** cada membro usa a própria conta da FIAP (já presente no tenant, sem convite) com `Owner` na assinatura, ou `Contributor` + `Role Based Access Control Administrator`. A role de RBAC é necessária porque a stack cria e remove role assignments (`AcrPull`, `Network Contributor`, `Key Vault Secrets Officer`).
+2. **Key Vault em modo RBAC** (`rbac_authorization_enabled = true`). Cada identidade da lista `secrets_officer_object_ids` (`environments/<ambiente>.tfvars`) recebe `Key Vault Secrets Officer` no cofre, além de quem executa o Terraform. Um `time_sleep` de 60 s aguarda a propagação do RBAC antes de gravar os secrets.
+3. **Pipeline:** service principal `sp-garage-flow-github-actions` com credencial federada (OIDC) restrita a `repo:garage-flow-api/garage-flow-api:ref:refs/heads/main`, com `Contributor` + `Role Based Access Control Administrator` na assinatura. O pipeline autentica com `ARM_USE_OIDC=true`, `ARM_CLIENT_ID`, `ARM_TENANT_ID` e `ARM_SUBSCRIPTION_ID`, sem segredo armazenado no GitHub.
+4. **State compartilhado:** `infra/azure/backend.hcl` é versionado (contém apenas nomes), para que todos usem o mesmo state remoto. Na AWS o arquivo continua local, porque cada membro usa o próprio Learner Lab.
+
+**Motivo principal.** Nenhuma credencial pessoal é compartilhada, e qualquer membro ou o pipeline pode aplicar a stack sem tirar o acesso dos demais.
+
+**Prós**
+- Atribuições de RBAC são aditivas: com todos na lista, o conjunto de role assignments é o mesmo para qualquer executor, sem alteração a cada `apply`.
+- Auditoria por pessoa no Activity Log, em vez de uma conta compartilhada.
+- O pipeline não guarda client secret com validade a renovar.
+
+**Contras**
+- No modo RBAC, `Owner` da assinatura não lê secrets: quem precisar consultar o cofre deve estar em `secrets_officer_object_ids` (ou receber a role manualmente).
+- Quem executa o Terraform sem estar na lista ganha acesso, mas perde no próximo `apply` de outra pessoa.
+- `Role Based Access Control Administrator` sem condição permite conceder qualquer role na assinatura. Risco aceito pelo caráter acadêmico; em produção, a role deve ser restrita por condição às roles usadas pela stack.
+- Os créditos consumidos são do dono da assinatura.
+
+**Alternativas descartadas**
+
+| Alternativa | Motivo do descarte |
+| --- | --- |
+| Compartilhar a conta pessoal (usuário e senha) | Viola as políticas da FIAP e da Microsoft, impede MFA individual e auditoria |
+| Access policies com lista de `object_id` | Funciona, mas é um modelo legado no Key Vault; RBAC é o padrão recomendado e unifica as permissões no IAM |
+| Service principal com client secret | Segredo de longa duração armazenado no GitHub, que precisa de rotação |
+| Uma assinatura por membro | Créditos e recursos duplicados; o pipeline teria de escolher a assinatura |
 
 ---
 

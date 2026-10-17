@@ -86,6 +86,17 @@ variable "bootstrap_admin_name" {
   default = "Garage Flow Admin"
 }
 
+variable "secrets_officer_object_ids" {
+  description = <<-EOT
+    Object IDs (Entra ID) com acesso de leitura/escrita aos secrets do Key Vault (RBAC
+    "Key Vault Secrets Officer"): membros do grupo e o service principal do CI/CD.
+    Quem executa o Terraform é incluído automaticamente.
+    Obtenha o seu com: az ad signed-in-user show --query id --output tsv
+  EOT
+  type        = list(string)
+  default     = []
+}
+
 variable "bootstrap_admin_email" {
   type    = string
   default = "admin@garage-flow.local"

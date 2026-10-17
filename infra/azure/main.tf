@@ -111,6 +111,8 @@ module "secrets" {
   location            = azurerm_resource_group.this.location
   resource_group_name = azurerm_resource_group.this.name
 
+  secrets_officer_object_ids = var.secrets_officer_object_ids
+
   values = {
     database-url          = module.kubernetes_platform.database_url
     postgres-password     = random_password.db.result

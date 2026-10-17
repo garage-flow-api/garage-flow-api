@@ -373,6 +373,14 @@ until ask ARM_SUBSCRIPTION_ID "ID da assinatura (Enter usa a Atual):" &&
 done
 write_env ARM_SUBSCRIPTION_ID "$ARM_SUBSCRIPTION_ID"
 say "${GREEN}✓${RESET} Assinatura ativa: $(az account show --query name --output tsv)"
+
+# Key Vault em modo RBAC: só quem está em secrets_officer_object_ids mantém acesso aos secrets.
+user_object_id=$(az ad signed-in-user show --query id --output tsv 2>/dev/null || true)
+if [[ -n "$user_object_id" ]] && ! grep -q "\"${user_object_id}\"" "$TFVARS"; then
+  warn "Seu object ID (${user_object_id}) não está em secrets_officer_object_ids (${TFVARS})."
+  note "Sem ele na lista, você perde o acesso aos secrets do Key Vault quando outra pessoa aplicar."
+  note "Peça para incluí-lo ou adicione-o ao tfvars. Detalhes: infra/README.md, 'Acesso do grupo'."
+fi
 pause
 
 # ── 4 ─────────────────────────────────────────────────────────────────────

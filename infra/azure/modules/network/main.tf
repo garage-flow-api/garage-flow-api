@@ -24,6 +24,10 @@ resource "azurerm_subnet" "postgres" {
   virtual_network_name = azurerm_virtual_network.this.name
   address_prefixes     = [cidrsubnet(var.vnet_cidr, 8, 8)]
 
+  # A Azure adiciona este service endpoint ao criar o PostgreSQL Flexible Server na subnet.
+  # Declarado aqui para o Terraform não tentar removê-lo a cada plan.
+  service_endpoints = ["Microsoft.Storage"]
+
   delegation {
     name = "postgres-flexible-server"
 
