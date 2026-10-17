@@ -1,0 +1,5 @@
+subscription_id      = "431af8e3-d217-4987-ac21-bee6311184f9"
+resource_group_name  = "rg-garage-flow-tfstate"
+storage_account_name = "gftfstatecdplqx"
+container_name       = "tfstate"
+key                  = "garage-flow/staging/terraform.tfstate"

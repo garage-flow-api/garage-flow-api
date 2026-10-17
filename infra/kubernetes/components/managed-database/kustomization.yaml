@@ -1,0 +1,41 @@
+# Remove o PostgreSQL in-cluster e os Secrets versionados.
+#
+# Em cloud o banco é gerenciado (RDS / Azure Database for PostgreSQL) e o Terraform
+# (infra/modules/kubernetes-platform) cria no cluster:
+#   - Secret `garage-flow-secrets` e `garage-flow-bootstrap-admin` com valores gerados;
+#   - Service `garage-flow-postgres` do tipo ExternalName apontando para o endpoint do banco,
+#     preservando o host usado pelo init container do Job de migration.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+patches:
+  - patch: |-
+      $patch: delete
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: garage-flow-postgres
+  - patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: postgres-pvc
+  - patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: garage-flow-postgres
+  - patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: garage-flow-secrets
+  - patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: garage-flow-bootstrap-admin
