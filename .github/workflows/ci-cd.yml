@@ -1,0 +1,40 @@
+name: ci-cd
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo "tarefa 3"
+
+  image:
+    needs: ci
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo "tarefa 4"
+
+  infra:
+    needs: image
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo "tarefa 7"
+
+  migrate:
+    needs: infra
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo "tarefa 8"
+
+  deploy:
+    needs: migrate
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo "tarefa 9"
