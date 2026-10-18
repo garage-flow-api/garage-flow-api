@@ -1,0 +1,116 @@
+name: ci-cd
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Em PR, um push novo cancela a execução anterior; na main, as execuções enfileiram.
+concurrency:
+  group: ci-cd-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  ci:
+    name: Lint, build e testes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Valores falsos: o globalSetup do Jest sobrescreve DATABASE_URL com o Postgres do
+    # testcontainers, mas o prisma.config.ts exige que a variável exista.
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      JWT_SECRET: ci-only
+      JWT_EXPIRES_IN: 1h
+      TRACKING_TOKEN_SECRET: ci-only
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.19.0 # mesma versão do Dockerfile
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      # O test:cov não dispara o pretest, então o client é gerado aqui.
+      - name: Gerar Prisma client
+        run: npx prisma generate
+
+      - name: Lint
+        run: npm run lint:check
+
+      - name: Formatação
+        run: npm run format:check
+
+      - name: Build
+        run: npm run build
+
+      - name: Testes com cobertura
+        run: npm run test:cov
+
+      - name: Publicar cobertura
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage
+          path: coverage/
+          if-no-files-found: ignore
+
+  image:
+    name: Imagem Docker e scan
+    needs: ci
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      IMAGE: garage-flow-api:${{ github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # TODO(parte 2): login no ACR via OIDC, build também do estágio `build` (imagem dos Jobs)
+      # e push das duas imagens com o SHA curto. Ver infra/scripts/deploy-app.sh.
+      - name: Build da imagem de produção
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          target: production
+          load: true
+          tags: ${{ env.IMAGE }}
+          # Sem cache, como no antigo vulnerability-scan.yml: garante que o `apk upgrade` da
+          # camada base rode a cada build e pegue as correções de segurança mais recentes.
+          no-cache: true
+
+      - name: Scan de vulnerabilidades
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE }}
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+
+  deploy:
+    name: Deploy (Azure)
+    needs: image
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    steps:
+      # TODO(parte 2): depende de k8s/ (PR #31) e infra/ (PR #33). Passos previstos, na ordem
+      # do infra/scripts/deploy-app.sh: login Azure (OIDC) → kubeconfig → Job de migration →
+      # Job de bootstrap-admin → overlay `cloud` → rollout status → curl /health.
+      - run: echo "deploy entra na parte 2"
