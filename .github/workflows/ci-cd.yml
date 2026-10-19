@@ -236,12 +236,33 @@ jobs:
           terraform init -input=false -backend-config=backend.hcl
           eval "$(terraform output -raw kubeconfig_command)"
           kubectl get nodes
+          {
+            echo "INGRESS_NAMESPACE=$(terraform output -raw ingress_namespace)"
+            # Só o comando que lê a senha no Key Vault, nunca o valor.
+            echo "SECRETS_READ_COMMAND=$(terraform output -raw secrets_read_command)"
+          } >> "$GITHUB_ENV"
+
+      # Bloco 4 do deploy-app.sh. Na Azure o Load Balancer só tem IP, então o host usa o DNS
+      # curinga nip.io (<ip>.nip.io resolve para <ip>), sem precisar de domínio próprio.
+      - name: Descobrir o host do Ingress
+        run: |
+          address="$(kubectl get service -n "$INGRESS_NAMESPACE" \
+            -o jsonpath='{range .items[?(@.spec.type=="LoadBalancer")]}{.status.loadBalancer.ingress[0].hostname}{.status.loadBalancer.ingress[0].ip}{end}')"
+          if [[ -z "$address" ]]; then
+            echo "::error::Load Balancer do Ingress Controller ainda sem endereço público."
+            exit 1
+          fi
+          if [[ "$address" =~ ^[0-9.]+$ ]]; then
+            address="$address.nip.io"
+          fi
+          echo "INGRESS_HOST=$address" >> "$GITHUB_ENV"
+          echo "Host do Ingress: $address"
 
       # render_overlay do deploy-app.sh: overlay temporário que troca as imagens locais pelas
       # do ACR com a tag do commit, sem alterar arquivos versionados.
       - name: Renderizar overlays com as imagens do commit
         run: |
-          for overlay in cloud-migration cloud-bootstrap-admin; do
+          for overlay in cloud-migration cloud-bootstrap-admin cloud; do
             mkdir -p "$RENDER_DIR/$overlay"
             cat > "$RENDER_DIR/$overlay/kustomization.yaml" <<YAML
           apiVersion: kustomize.config.k8s.io/v1beta1
@@ -257,6 +278,17 @@ jobs:
               newTag: "$IMAGE_TAG"
           YAML
           done
+          # O F5 NGINX Ingress Controller rejeita Ingress sem host (spec.rules[0].host: Required value).
+          cat >> "$RENDER_DIR/cloud/kustomization.yaml" <<YAML
+          patches:
+            - target:
+                kind: Ingress
+                name: garage-flow-ingress
+              patch: |-
+                - op: add
+                  path: /spec/rules/0/host
+                  value: "$INGRESS_HOST"
+          YAML
 
       # Bloco 3 do deploy-app.sh (run_job). Jobs são imutáveis: remove o anterior, aplica o
       # novo e espera concluir. A ordem importa: o admin depende das tabelas criadas aqui.
@@ -283,8 +315,44 @@ jobs:
           fi
           kubectl logs job/garage-flow-bootstrap-admin --tail=20 || true
 
-      # TODO(tarefa 9): bloco 4 do deploy-app.sh — host do Ingress (<ip>.nip.io), overlay
-      # `cloud`, rollout status e health check.
+      # ConfigMap, Deployment, Service, Ingress e HPA.
+      - name: Aplicar manifestos da API
+        run: |
+          kubectl apply -k "$RENDER_DIR/cloud"
+          kubectl rollout status deployment/garage-flow-deployment --timeout=300s
+
+      # Não existe no deploy-app.sh: confirma de fora do cluster, pelo Ingress, que a versão
+      # nova responde. /ready também checa a conexão com o banco.
+      - name: Health check
+        run: |
+          for path in health ready; do
+            echo "GET http://$INGRESS_HOST/$path"
+            curl --fail --silent --show-error --max-time 10 \
+              --retry 12 --retry-delay 5 --retry-all-errors \
+              "http://$INGRESS_HOST/$path"
+            echo
+          done
+
+      - name: Resumo do deploy
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<MD
+          ### Deploy concluído (imagem \`$IMAGE_TAG\`)
+
+          | | URL |
+          |---|---|
+          | API | http://$INGRESS_HOST |
+          | Swagger | http://$INGRESS_HOST/docs |
+          | Health | http://$INGRESS_HOST/health |
+
+          Senha do admin (requer acesso ao Key Vault): \`$SECRETS_READ_COMMAND\`
+          MD
+
+      - name: Diagnóstico em caso de falha
+        if: failure()
+        run: |
+          kubectl get pods,jobs,svc,ingress,hpa -o wide || true
+          kubectl describe deployment/garage-flow-deployment || true
+          kubectl logs deployment/garage-flow-deployment --all-containers --tail=100 || true
 
   # ---------------------------------------------------------------------------
   # Infra: só via "Run workflow", com confirmação digitada. Espelha infra/scripts/provision.sh
