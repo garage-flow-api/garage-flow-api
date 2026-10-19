@@ -1,0 +1,532 @@
+name: ci-cd
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  # Único jeito de criar ou destruir a infra: nada disso roda em push ou PR.
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'deploy = pipeline normal; provision = cria a infra (cobra crédito); destroy = remove tudo'
+        type: choice
+        options: [deploy, provision, destroy]
+        default: deploy
+      confirmacao:
+        description: "Obrigatório em provision ('sim') e destroy ('destruir'), como nos scripts de infra/"
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+# Só PRs compartilham fila (um push novo cancela o anterior). Fora de PR cada execução tem
+# grupo próprio: uma fila global descartaria um destroy pendente se chegasse um push depois.
+# A serialização de deploy e infra fica nos grupos dos jobs (deploy-staging / infra-staging).
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('ci-cd-pr-{0}', github.event.pull_request.number) || format('ci-cd-run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  ci:
+    name: Lint, build e testes
+    if: github.event_name != 'workflow_dispatch' || inputs.action == 'deploy'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Valores falsos: o globalSetup do Jest sobrescreve DATABASE_URL com o Postgres do
+    # testcontainers, mas o prisma.config.ts exige que a variável exista.
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      JWT_SECRET: ci-only
+      JWT_EXPIRES_IN: 1h
+      TRACKING_TOKEN_SECRET: ci-only
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.19.0 # mesma versão do Dockerfile
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      # O test:cov não dispara o pretest, então o client é gerado aqui.
+      - name: Gerar Prisma client
+        run: npx prisma generate
+
+      - name: Lint
+        run: npm run lint:check
+
+      - name: Formatação
+        run: npm run format:check
+
+      - name: Build
+        run: npm run build
+
+      - name: Testes com cobertura
+        run: npm run test:cov
+
+      - name: Publicar cobertura
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage
+          path: coverage/
+          if-no-files-found: ignore
+
+  image:
+    name: Imagem Docker, scan e publicação
+    needs: ci
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # Login OIDC na Azure. Também vale em PR (o GitHub não permite permissão condicional
+      # por evento), mas lá é inócuo: os steps da Azure não rodam e a credencial federada
+      # só aceita tokens da main.
+      id-token: write
+    outputs:
+      published: ${{ steps.infra.outputs.exists == 'true' }}
+      tag: ${{ steps.infra.outputs.tag }}
+      api-image: ${{ steps.infra.outputs.api_image }}
+      migration-image: ${{ steps.infra.outputs.migration_image }}
+    env:
+      IMAGE: garage-flow-api:${{ github.sha }}
+      # Em PR só builda e escaneia. A credencial OIDC só aceita a main (ver infra/README.md).
+      PUBLISH: ${{ github.event_name != 'pull_request' }}
+      ARM_USE_OIDC: 'true'
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # Sem `--platform linux/amd64` (o deploy-app.sh força por causa dos Macs Apple Silicon):
+      # o runner já é amd64, a mesma arquitetura dos nodes do AKS.
+      - name: Build da imagem de produção
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          target: production
+          load: true
+          tags: ${{ env.IMAGE }}
+          # Sem cache, como no antigo vulnerability-scan.yml: garante que o `apk upgrade` da
+          # camada base rode a cada build e pegue as correções de segurança mais recentes.
+          no-cache: true
+
+      - name: Scan de vulnerabilidades
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE }}
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+
+      # Daqui para baixo só roda fora de PR, e só depois do scan passar.
+      - name: Login na Azure (OIDC)
+        if: env.PUBLISH == 'true'
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        if: env.PUBLISH == 'true'
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.16.4
+          terraform_wrapper: false # o wrapper polui a saída de `terraform output -raw`
+
+      # Só lê o state remoto: não cria nem altera recurso nenhum. A infra é efêmera (ADR-13);
+      # se ela não estiver de pé, as imagens não são publicadas e o deploy é pulado.
+      - name: Ler outputs do Terraform
+        id: infra
+        if: env.PUBLISH == 'true'
+        working-directory: infra/azure
+        run: |
+          terraform init -input=false -backend-config=backend.hcl
+          if ! api_repo="$(terraform output -raw api_image_repository 2>/dev/null)" || [[ -z "$api_repo" ]]; then
+            echo "::notice title=Infra não provisionada::Imagens não publicadas e deploy pulado. Rode o provision para subir o ambiente."
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Cada output numa variável antes: um erro dentro de `echo "...$(...)"` não para o
+          # bash -e (o echo termina com sucesso) e geraria um output vazio.
+          migration_repo="$(terraform output -raw migration_image_repository)"
+          registry_login="$(terraform output -raw registry_login_command)"
+          # SHA curto fixo em 7 caracteres. O deploy-app.sh usa `git rev-parse --short` (que
+          # pode crescer) e o sufixo -dirty, que nunca se aplica a um checkout limpo do CI.
+          tag="${GITHUB_SHA::7}"
+          {
+            echo "exists=true"
+            echo "tag=$tag"
+            echo "api_image=$api_repo:$tag"
+            echo "migration_image=$migration_repo:$tag"
+            echo "registry_login=$registry_login"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Login no ACR
+        if: steps.infra.outputs.exists == 'true'
+        env:
+          REGISTRY_LOGIN: ${{ steps.infra.outputs.registry_login }}
+        run: eval "$REGISTRY_LOGIN"
+
+      # Publica exatamente a imagem que passou pelo scan, sem rebuild.
+      - name: Publicar imagem da API
+        if: steps.infra.outputs.exists == 'true'
+        env:
+          API_IMAGE: ${{ steps.infra.outputs.api_image }}
+        run: |
+          docker tag "$IMAGE" "$API_IMAGE"
+          docker push "$API_IMAGE"
+
+      # Estágio `build` (tem o Prisma CLI), usado pelos Jobs de migration e bootstrap-admin.
+      # Sem Trivy: tem dependências de desenvolvimento e nunca recebe tráfego. Reaproveita o
+      # cache do builder deste job, então a camada base é a que acabou de ser refeita sem cache.
+      - name: Build e publicação da imagem dos Jobs
+        if: steps.infra.outputs.exists == 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          target: build
+          push: true
+          tags: ${{ steps.infra.outputs.migration_image }}
+
+  deploy:
+    name: Deploy (Azure)
+    needs: image
+    if: github.event_name != 'pull_request' && needs.image.outputs.published == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write # login OIDC na Azure
+    env:
+      ARM_USE_OIDC: 'true'
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      API_IMAGE: ${{ needs.image.outputs.api-image }}
+      MIGRATION_IMAGE: ${{ needs.image.outputs.migration-image }}
+      IMAGE_TAG: ${{ needs.image.outputs.tag }}
+      # Mesmo diretório do deploy-app.sh (ignorado pelo infra/.gitignore).
+      RENDER_DIR: infra/kubernetes/.deploy
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Pushes seguidos rodam `ci` e `image` em paralelo, e o grupo deploy-staging só evita
+      # deploys simultâneos, não garante a ordem. Se a main já avançou, este deploy é pulado
+      # (sem falhar): a execução do commit mais novo faz o deploy. Disparo manual não é pulado.
+      - name: Conferir se é o commit mais recente da main
+        id: latest
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            head="$(git ls-remote origin refs/heads/main | cut -f1)"
+            if [[ "$head" != "$GITHUB_SHA" ]]; then
+              echo "::notice title=Deploy pulado::A main já está em ${head::7}; o deploy fica com a execução desse commit."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Login na Azure (OIDC)
+        if: steps.latest.outputs.skip != 'true'
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        if: steps.latest.outputs.skip != 'true'
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.16.4
+          terraform_wrapper: false
+
+      # configure_kubectl do lib.sh. kubectl e az já vêm no runner ubuntu-24.04.
+      - name: Configurar kubectl
+        if: steps.latest.outputs.skip != 'true'
+        working-directory: infra/azure
+        run: |
+          terraform init -input=false -backend-config=backend.hcl
+          eval "$(terraform output -raw kubeconfig_command)"
+          # Não existe no script: falha aqui, com mensagem clara, se o kubeconfig não funcionar.
+          kubectl get nodes
+          {
+            echo "INGRESS_NAMESPACE=$(terraform output -raw ingress_namespace)"
+            # Só o comando que lê a senha no Key Vault, nunca o valor.
+            echo "SECRETS_READ_COMMAND=$(terraform output -raw secrets_read_command)"
+          } >> "$GITHUB_ENV"
+
+      # Bloco 4 do deploy-app.sh. Na Azure o Load Balancer só tem IP, então o host usa o DNS
+      # curinga nip.io (<ip>.nip.io resolve para <ip>), sem precisar de domínio próprio.
+      # Roda antes dos Jobs (no script, roda depois): o host é necessário para renderizar o
+      # overlay `cloud` no step seguinte, e sem IP o deploy falha antes de mexer no banco.
+      - name: Descobrir o host do Ingress
+        if: steps.latest.outputs.skip != 'true'
+        run: |
+          address="$(kubectl get service -n "$INGRESS_NAMESPACE" \
+            -o jsonpath='{range .items[?(@.spec.type=="LoadBalancer")]}{.status.loadBalancer.ingress[0].hostname}{.status.loadBalancer.ingress[0].ip}{end}')"
+          if [[ -z "$address" ]]; then
+            echo "::error::Load Balancer do Ingress Controller ainda sem endereço público."
+            exit 1
+          fi
+          if [[ "$address" =~ ^[0-9.]+$ ]]; then
+            address="$address.nip.io"
+          fi
+          echo "INGRESS_HOST=$address" >> "$GITHUB_ENV"
+          echo "Host do Ingress: $address"
+
+      # render_overlay do deploy-app.sh: overlay temporário que troca as imagens locais pelas
+      # do ACR com a tag do commit, sem alterar arquivos versionados.
+      - name: Renderizar overlays com as imagens do commit
+        if: steps.latest.outputs.skip != 'true'
+        run: |
+          for overlay in cloud-migration cloud-bootstrap-admin cloud; do
+            mkdir -p "$RENDER_DIR/$overlay"
+            cat > "$RENDER_DIR/$overlay/kustomization.yaml" <<YAML
+          apiVersion: kustomize.config.k8s.io/v1beta1
+          kind: Kustomization
+          resources:
+            - ../../overlays/$overlay
+          images:
+            - name: garage-flow-api
+              newName: ${API_IMAGE%:*}
+              newTag: "$IMAGE_TAG"
+            - name: garage-flow-api-migration
+              newName: ${MIGRATION_IMAGE%:*}
+              newTag: "$IMAGE_TAG"
+          YAML
+          done
+          # O F5 NGINX Ingress Controller rejeita Ingress sem host (spec.rules[0].host: Required value).
+          cat >> "$RENDER_DIR/cloud/kustomization.yaml" <<YAML
+          patches:
+            - target:
+                kind: Ingress
+                name: garage-flow-ingress
+              patch: |-
+                - op: add
+                  path: /spec/rules/0/host
+                  value: "$INGRESS_HOST"
+          YAML
+
+      # Bloco 3 do deploy-app.sh (run_job). Jobs são imutáveis: remove o anterior, aplica o
+      # novo e espera concluir. A ordem importa: o admin depende das tabelas criadas aqui.
+      - name: Job de migration (prisma migrate deploy)
+        if: steps.latest.outputs.skip != 'true'
+        run: |
+          kubectl delete job garage-flow-migration --ignore-not-found --wait=true
+          kubectl apply -k "$RENDER_DIR/cloud-migration"
+          if ! kubectl wait --for=condition=complete job/garage-flow-migration --timeout=300s; then
+            kubectl logs job/garage-flow-migration --all-containers --tail=100 || true
+            echo "::error::Job garage-flow-migration não concluiu."
+            exit 1
+          fi
+          kubectl logs job/garage-flow-migration --tail=20 || true
+
+      # Idempotente: cria o primeiro admin só se ele ainda não existir.
+      - name: Job de bootstrap do admin
+        if: steps.latest.outputs.skip != 'true'
+        run: |
+          kubectl delete job garage-flow-bootstrap-admin --ignore-not-found --wait=true
+          kubectl apply -k "$RENDER_DIR/cloud-bootstrap-admin"
+          if ! kubectl wait --for=condition=complete job/garage-flow-bootstrap-admin --timeout=300s; then
+            kubectl logs job/garage-flow-bootstrap-admin --all-containers --tail=100 || true
+            echo "::error::Job garage-flow-bootstrap-admin não concluiu."
+            exit 1
+          fi
+          kubectl logs job/garage-flow-bootstrap-admin --tail=20 || true
+
+      # ConfigMap, Deployment, Service, Ingress e HPA.
+      - name: Aplicar manifestos da API
+        if: steps.latest.outputs.skip != 'true'
+        run: |
+          kubectl apply -k "$RENDER_DIR/cloud"
+          kubectl rollout status deployment/garage-flow-deployment --timeout=300s
+
+      # Não existe no deploy-app.sh: confirma de fora do cluster, pelo Ingress, que a versão
+      # nova responde. /ready também checa a conexão com o banco.
+      - name: Health check
+        if: steps.latest.outputs.skip != 'true'
+        run: |
+          for path in health ready; do
+            echo "GET http://$INGRESS_HOST/$path"
+            curl --fail --silent --show-error --max-time 10 \
+              --retry 12 --retry-delay 5 --retry-all-errors \
+              "http://$INGRESS_HOST/$path"
+            echo
+          done
+
+      - name: Resumo do deploy
+        if: steps.latest.outputs.skip != 'true'
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<MD
+          ### Deploy concluído (imagem \`$IMAGE_TAG\`)
+
+          | | URL |
+          |---|---|
+          | API | http://$INGRESS_HOST |
+          | Swagger | http://$INGRESS_HOST/docs |
+          | Health | http://$INGRESS_HOST/health |
+
+          Senha do admin (requer acesso ao Key Vault): \`$SECRETS_READ_COMMAND\`
+          MD
+
+      - name: Diagnóstico em caso de falha
+        if: failure()
+        run: |
+          kubectl get pods,jobs,svc,ingress,hpa -o wide || true
+          kubectl describe deployment/garage-flow-deployment || true
+          kubectl logs deployment/garage-flow-deployment --all-containers --tail=100 || true
+
+  # ---------------------------------------------------------------------------
+  # Infra: só via "Run workflow", com confirmação digitada. Espelha infra/scripts/provision.sh
+  # e destroy.sh. O bootstrap do state remoto não roda aqui: o backend.hcl é versionado e o
+  # Storage Account do state já existe (criado pelo Dev 3).
+  # ---------------------------------------------------------------------------
+  provision:
+    name: Provisionar infra (Azure)
+    if: github.event_name == 'workflow_dispatch' && inputs.action == 'provision'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write # login OIDC na Azure
+    concurrency:
+      group: infra-staging
+      cancel-in-progress: false
+    # TODO: `environment: staging` só depois que existir a credencial federada desse
+    # environment; antes disso, ele quebraria o login OIDC até na main.
+    env:
+      ARM_USE_OIDC: 'true'
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+    defaults:
+      run:
+        working-directory: infra/azure
+    steps:
+      - name: Conferir confirmação
+        env:
+          CONFIRMACAO: ${{ inputs.confirmacao }}
+        working-directory: .
+        run: |
+          if [[ "$CONFIRMACAO" != "sim" ]]; then
+            echo "::error::Provision cria recursos que cobram crédito. Rode de novo com confirmacao = sim."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Login na Azure (OIDC)
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.16.4
+          terraform_wrapper: false
+
+      - name: Terraform init
+        run: terraform init -input=false -backend-config=backend.hcl
+
+      - name: Terraform plan
+        run: terraform plan -input=false -lock-timeout=5m -var-file=environments/staging.tfvars -out=tfplan
+
+      - name: Terraform apply (~15-20 min)
+        run: terraform apply -input=false -lock-timeout=5m tfplan
+
+      - name: Outputs
+        run: terraform output
+
+  destroy:
+    name: Destruir infra (Azure)
+    if: github.event_name == 'workflow_dispatch' && inputs.action == 'destroy'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write # login OIDC na Azure
+    concurrency:
+      group: infra-staging
+      cancel-in-progress: false
+    env:
+      ARM_USE_OIDC: 'true'
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+    defaults:
+      run:
+        working-directory: infra/azure
+    steps:
+      - name: Conferir confirmação
+        env:
+          CONFIRMACAO: ${{ inputs.confirmacao }}
+        working-directory: .
+        run: |
+          if [[ "$CONFIRMACAO" != "destruir" ]]; then
+            echo "::error::Destroy apaga cluster, banco (com os dados), registry e segredos. Rode de novo com confirmacao = destruir."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Login na Azure (OIDC)
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.16.4
+          terraform_wrapper: false
+
+      - name: Terraform init
+        run: terraform init -input=false -backend-config=backend.hcl
+
+      # Bloco 1 do destroy.sh: remove a aplicação antes do banco e do cluster.
+      - name: Remover a aplicação do cluster
+        run: |
+          if kubeconfig="$(terraform output -raw kubeconfig_command 2>/dev/null)" && eval "$kubeconfig"; then
+            kubectl delete -k ../kubernetes/overlays/cloud --ignore-not-found --wait=true || true
+            kubectl delete job garage-flow-migration garage-flow-bootstrap-admin --ignore-not-found || true
+          else
+            echo "::warning::Cluster inacessível ou já removido; seguindo para o terraform destroy."
+          fi
+
+      # Bloco 2: o Load Balancer é criado pelo Kubernetes, fora do Terraform. Removê-lo antes
+      # evita recursos de rede órfãos bloqueando a exclusão da VNet.
+      - name: Remover Ingress Controller e Load Balancer
+        run: |
+          terraform destroy -input=false -auto-approve -lock-timeout=5m \
+            -var-file=environments/staging.tfvars \
+            -target=module.kubernetes_platform.helm_release.ingress || true
+
+      # Bloco 3. O state remoto (Storage Account do bootstrap) é preservado.
+      - name: Terraform destroy (~10-15 min)
+        run: terraform destroy -input=false -auto-approve -lock-timeout=5m -var-file=environments/staging.tfvars

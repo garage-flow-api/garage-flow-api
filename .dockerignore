@@ -7,3 +7,9 @@ coverage
 .env
 .env.*
 !.env.example
+
+# Infraestrutura e manifestos não fazem parte da imagem
+# (infra/ pode conter providers do Terraform com centenas de MB em .terraform/)
+infra
+k8s
+k6

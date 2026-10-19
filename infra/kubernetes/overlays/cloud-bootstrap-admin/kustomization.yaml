@@ -1,0 +1,19 @@
+# Somente o Job `garage-flow-bootstrap-admin` (idempotente) contra o banco gerenciado.
+# Deve ser executado após a conclusão do Job de migration.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../../../k8s
+
+components:
+  - ../../components/managed-database
+  - ../../components/without-app
+
+patches:
+  - patch: |-
+      $patch: delete
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: garage-flow-migration

@@ -1,0 +1,41 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: garage-flow-bootstrap-admin
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: garage-flow-bootstrap-admin
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: bootstrap-admin
+          image: garage-flow-api-migration:local
+          imagePullPolicy: IfNotPresent
+          command:
+            - npm
+            - run
+            - db:bootstrap-admin
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: garage-flow-secrets
+                  key: DATABASE_URL
+            - name: ADMIN_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: garage-flow-bootstrap-admin
+                  key: ADMIN_NAME
+            - name: ADMIN_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: garage-flow-bootstrap-admin
+                  key: ADMIN_EMAIL
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: garage-flow-bootstrap-admin
+                  key: ADMIN_PASSWORD
