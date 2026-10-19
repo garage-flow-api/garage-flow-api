@@ -199,11 +199,92 @@ jobs:
     concurrency:
       group: deploy-staging
       cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write # login OIDC na Azure
+    env:
+      ARM_USE_OIDC: 'true'
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      API_IMAGE: ${{ needs.image.outputs.api-image }}
+      MIGRATION_IMAGE: ${{ needs.image.outputs.migration-image }}
+      IMAGE_TAG: ${{ needs.image.outputs.tag }}
+      # Mesmo diretório do deploy-app.sh (ignorado pelo infra/.gitignore).
+      RENDER_DIR: infra/kubernetes/.deploy
     steps:
-      # TODO(tarefas 6 e 9): login Azure (OIDC) → kubeconfig → Job de migration →
-      # Job de bootstrap-admin → overlay `cloud` → rollout status → curl /health.
-      # Referência: infra/scripts/deploy-app.sh.
-      - run: echo "deploy entra nas tarefas 6 e 9"
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Login na Azure (OIDC)
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.16.4
+          terraform_wrapper: false
+
+      # configure_kubectl do lib.sh. kubectl e az já vêm no runner ubuntu-24.04.
+      - name: Configurar kubectl
+        working-directory: infra/azure
+        run: |
+          terraform init -input=false -backend-config=backend.hcl
+          eval "$(terraform output -raw kubeconfig_command)"
+          kubectl get nodes
+
+      # render_overlay do deploy-app.sh: overlay temporário que troca as imagens locais pelas
+      # do ACR com a tag do commit, sem alterar arquivos versionados.
+      - name: Renderizar overlays com as imagens do commit
+        run: |
+          for overlay in cloud-migration cloud-bootstrap-admin; do
+            mkdir -p "$RENDER_DIR/$overlay"
+            cat > "$RENDER_DIR/$overlay/kustomization.yaml" <<YAML
+          apiVersion: kustomize.config.k8s.io/v1beta1
+          kind: Kustomization
+          resources:
+            - ../../overlays/$overlay
+          images:
+            - name: garage-flow-api
+              newName: ${API_IMAGE%:*}
+              newTag: "$IMAGE_TAG"
+            - name: garage-flow-api-migration
+              newName: ${MIGRATION_IMAGE%:*}
+              newTag: "$IMAGE_TAG"
+          YAML
+          done
+
+      # Bloco 3 do deploy-app.sh (run_job). Jobs são imutáveis: remove o anterior, aplica o
+      # novo e espera concluir. A ordem importa: o admin depende das tabelas criadas aqui.
+      - name: Job de migration (prisma migrate deploy)
+        run: |
+          kubectl delete job garage-flow-migration --ignore-not-found --wait=true
+          kubectl apply -k "$RENDER_DIR/cloud-migration"
+          if ! kubectl wait --for=condition=complete job/garage-flow-migration --timeout=300s; then
+            kubectl logs job/garage-flow-migration --all-containers --tail=100 || true
+            echo "::error::Job garage-flow-migration não concluiu."
+            exit 1
+          fi
+          kubectl logs job/garage-flow-migration --tail=20 || true
+
+      # Idempotente: cria o primeiro admin só se ele ainda não existir.
+      - name: Job de bootstrap do admin
+        run: |
+          kubectl delete job garage-flow-bootstrap-admin --ignore-not-found --wait=true
+          kubectl apply -k "$RENDER_DIR/cloud-bootstrap-admin"
+          if ! kubectl wait --for=condition=complete job/garage-flow-bootstrap-admin --timeout=300s; then
+            kubectl logs job/garage-flow-bootstrap-admin --all-containers --tail=100 || true
+            echo "::error::Job garage-flow-bootstrap-admin não concluiu."
+            exit 1
+          fi
+          kubectl logs job/garage-flow-bootstrap-admin --tail=20 || true
+
+      # TODO(tarefa 9): bloco 4 do deploy-app.sh — host do Ingress (<ip>.nip.io), overlay
+      # `cloud`, rollout status e health check.
 
   # ---------------------------------------------------------------------------
   # Infra: só via "Run workflow", com confirmação digitada. Espelha infra/scripts/provision.sh
