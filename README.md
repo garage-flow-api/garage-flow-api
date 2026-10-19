@@ -43,6 +43,9 @@ Neste repositório, o ambiente de desenvolvimento é executado com Docker Compos
 - **Docker / Docker Compose**
 - **Kubernetes**
 - **Horizontal Pod Autoscaler (HPA)**
+- **Terraform** (infraestrutura como código)
+- **GitHub Actions** (pipeline de CI/CD)
+- **Trivy** (scan de vulnerabilidades da imagem)
 - **k6**
 - **Swagger**
 - **class-validator**
@@ -448,6 +451,62 @@ infra/scripts/provision.sh     # rede, cluster, banco, registry e segredos
 infra/scripts/deploy-app.sh    # imagens, migrations, primeiro admin e API
 infra/scripts/destroy.sh       # remove tudo ao final da sessão
 ```
+
+## Pipeline de CI/CD
+
+A pipeline fica em [`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml) (GitHub Actions) e usa a stack **Azure** de `infra/`. Ela cobre build da aplicação, testes automatizados, build da imagem Docker, deploy do banco (Terraform + Job de migration), deploy no cluster e aplicação dos manifestos. É a versão automatizada de `infra/scripts/provision.sh`, `deploy-app.sh` e `destroy.sh`.
+
+### Fluxo
+
+```mermaid
+flowchart LR
+    PR["Pull request"] --> CI1["ci"] --> IMG1["image<br/>build + Trivy"]
+
+    PUSH["Push na main"] --> CI2["ci"] --> IMG2["image<br/>build + Trivy + push no ACR"]
+    IMG2 -->|"infra no ar"| DEP["deploy<br/>migration, admin, manifestos,<br/>rollout e health check"]
+    IMG2 -.->|"infra destruída"| SKIP["deploy pulado"]
+
+    RUN["Run workflow"] -->|"action = provision"| PROV["provision<br/>terraform apply"]
+    RUN -->|"action = destroy"| DEST["destroy<br/>terraform destroy"]
+    RUN -->|"action = deploy"| CI2
+```
+
+### Jobs
+
+| Job | Quando roda | O que faz |
+| --- | --- | --- |
+| `ci` | PR, push na `main` e "Run workflow" com `deploy` | `npm ci`, Prisma generate, lint, Prettier, build e testes com cobertura (artefato `coverage`) |
+| `image` | Depois do `ci` | Builda a imagem de produção e roda o Trivy (`CRITICAL`/`HIGH`). Fora de PR, publica no ACR a imagem da API e a dos Jobs, com o SHA curto do commit como tag |
+| `deploy` | Depois do `image`, só se as imagens foram publicadas | Jobs de migration e de criação do primeiro admin, overlay `cloud` (API, Service, Ingress, HPA), rollout e checagem de `/health` e `/ready`. As URLs aparecem no resumo da execução |
+| `provision` | Só pelo "Run workflow" | `terraform plan` + `apply` em `infra/azure`: AKS, ACR, PostgreSQL, Key Vault e Ingress (~15-20 min) |
+| `destroy` | Só pelo "Run workflow" | Remove a aplicação do cluster, o Ingress e o restante da infra com `terraform destroy` (~10-15 min) |
+
+Nada cria ou destrói infraestrutura automaticamente. Em push na `main`, a pipeline só **lê** o state do Terraform: se a infra não existir, as imagens não são publicadas e o deploy é pulado, sem falhar. As mesmas verificações do Husky (Prettier, ESLint e testes) são repetidas no job `ci`.
+
+### Provisionar, fazer deploy e destruir
+
+Em **Actions → ci-cd → Run workflow**, na branch `main`:
+
+1. **Provision:** `action` = `provision` e `confirmacao` = `sim`. Aguarde terminar.
+2. **Deploy:** faça um push na `main`, ou rode com `action` = `deploy`. Ao final, o resumo da execução mostra as URLs da API, do Swagger e do health check (`http://<ip>.nip.io`).
+3. **Destroy:** `action` = `destroy` e `confirmacao` = `destruir`.
+
+Sem a confirmação exata, o job falha antes de qualquer acesso à Azure. A senha do primeiro administrador fica no Key Vault; o comando para lê-la aparece no resumo do deploy.
+
+### Credenciais
+
+- Login na Azure por **OIDC** (credencial federada do service principal `sp-garage-flow-github-actions`, aceita só para a `main`). **Nenhum secret é armazenado no GitHub.**
+- Três **repository variables** (Settings → Secrets and variables → Actions → Variables): `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` e `AZURE_SUBSCRIPTION_ID`. Não são valores sensíveis.
+- Os segredos da aplicação (senha do banco, `JWT_SECRET`, `TRACKING_TOKEN_SECRET`, senha do admin) são gerados pelo Terraform, guardados no Key Vault e criados como Secrets no cluster. A pipeline não os manipula.
+
+### Avisos
+
+- **Rode sempre o `destroy` ao terminar.** O AKS e o banco consomem crédito enquanto estiverem no ar.
+- **Não faça push na `main` enquanto `provision` ou `destroy` estiver rodando.** O deploy desse push falharia (sem custo, mas vermelho).
+- **O Trivy bloqueia a publicação:** com vulnerabilidade `CRITICAL` ou `HIGH` corrigível, a imagem não vai para o ACR e não há deploy.
+- Em pushes seguidos, só o commit mais recente da `main` é implantado; execuções de commits anteriores pulam o deploy.
+
+Tempo médio da pipeline: _TODO — preencher após a execução real_.
 
 ## Como usar e testar a API
 
