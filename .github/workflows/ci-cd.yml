@@ -64,12 +64,26 @@ jobs:
           if-no-files-found: ignore
 
   image:
-    name: Imagem Docker e scan
+    name: Imagem Docker, scan e publicação
     needs: ci
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write # login OIDC na Azure
+    outputs:
+      published: ${{ steps.infra.outputs.exists == 'true' }}
+      tag: ${{ steps.infra.outputs.tag }}
+      api-image: ${{ steps.infra.outputs.api_image }}
+      migration-image: ${{ steps.infra.outputs.migration_image }}
     env:
       IMAGE: garage-flow-api:${{ github.sha }}
+      # Em PR só builda e escaneia. A credencial OIDC só aceita a main (ver infra/README.md).
+      PUBLISH: ${{ github.event_name != 'pull_request' }}
+      ARM_USE_OIDC: 'true'
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -77,8 +91,6 @@ jobs:
       - name: Setup Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
-      # TODO(parte 2): login no ACR via OIDC, build também do estágio `build` (imagem dos Jobs)
-      # e push das duas imagens com o SHA curto. Ver infra/scripts/deploy-app.sh.
       - name: Build da imagem de produção
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -100,17 +112,81 @@ jobs:
           vuln-type: os,library
           severity: CRITICAL,HIGH
 
+      # Daqui para baixo só roda fora de PR, e só depois do scan passar.
+      - name: Login na Azure (OIDC)
+        if: env.PUBLISH == 'true'
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        if: env.PUBLISH == 'true'
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.16.4
+          terraform_wrapper: false # o wrapper polui a saída de `terraform output -raw`
+
+      # Só lê o state remoto: não cria nem altera recurso nenhum. A infra é efêmera (ADR-13);
+      # se ela não estiver de pé, as imagens não são publicadas e o deploy é pulado.
+      - name: Ler outputs do Terraform
+        id: infra
+        if: env.PUBLISH == 'true'
+        working-directory: infra/azure
+        run: |
+          terraform init -input=false -backend-config=backend.hcl
+          if ! api_repo="$(terraform output -raw api_image_repository 2>/dev/null)" || [[ -z "$api_repo" ]]; then
+            echo "::notice title=Infra não provisionada::Imagens não publicadas e deploy pulado. Rode o provision para subir o ambiente."
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          tag="${GITHUB_SHA::7}"
+          {
+            echo "exists=true"
+            echo "tag=$tag"
+            echo "api_image=$api_repo:$tag"
+            echo "migration_image=$(terraform output -raw migration_image_repository):$tag"
+            echo "registry_login=$(terraform output -raw registry_login_command)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Login no ACR
+        if: steps.infra.outputs.exists == 'true'
+        env:
+          REGISTRY_LOGIN: ${{ steps.infra.outputs.registry_login }}
+        run: eval "$REGISTRY_LOGIN"
+
+      # Publica exatamente a imagem que passou pelo scan, sem rebuild.
+      - name: Publicar imagem da API
+        if: steps.infra.outputs.exists == 'true'
+        env:
+          API_IMAGE: ${{ steps.infra.outputs.api_image }}
+        run: |
+          docker tag "$IMAGE" "$API_IMAGE"
+          docker push "$API_IMAGE"
+
+      # Estágio `build` (tem o Prisma CLI), usado pelos Jobs de migration e bootstrap-admin.
+      # Sem Trivy: tem dependências de desenvolvimento e nunca recebe tráfego.
+      - name: Build e publicação da imagem dos Jobs
+        if: steps.infra.outputs.exists == 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          target: build
+          push: true
+          tags: ${{ steps.infra.outputs.migration_image }}
+
   deploy:
     name: Deploy (Azure)
     needs: image
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && needs.image.outputs.published == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     concurrency:
       group: deploy-staging
       cancel-in-progress: false
     steps:
-      # TODO(parte 2): depende de k8s/ (PR #31) e infra/ (PR #33). Passos previstos, na ordem
-      # do infra/scripts/deploy-app.sh: login Azure (OIDC) → kubeconfig → Job de migration →
+      # TODO(tarefas 6 e 9): login Azure (OIDC) → kubeconfig → Job de migration →
       # Job de bootstrap-admin → overlay `cloud` → rollout status → curl /health.
-      - run: echo "deploy entra na parte 2"
+      # Referência: infra/scripts/deploy-app.sh.
+      - run: echo "deploy entra nas tarefas 6 e 9"
