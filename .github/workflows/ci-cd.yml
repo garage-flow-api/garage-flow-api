@@ -84,7 +84,10 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
-      id-token: write # login OIDC na Azure
+      # Login OIDC na Azure. Também vale em PR (o GitHub não permite permissão condicional
+      # por evento), mas lá é inócuo: os steps da Azure não rodam e a credencial federada
+      # só aceita tokens da main.
+      id-token: write
     outputs:
       published: ${{ steps.infra.outputs.exists == 'true' }}
       tag: ${{ steps.infra.outputs.tag }}
@@ -105,6 +108,8 @@ jobs:
       - name: Setup Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
+      # Sem `--platform linux/amd64` (o deploy-app.sh força por causa dos Macs Apple Silicon):
+      # o runner já é amd64, a mesma arquitetura dos nodes do AKS.
       - name: Build da imagem de produção
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -155,13 +160,19 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          # Cada output numa variável antes: um erro dentro de `echo "...$(...)"` não para o
+          # bash -e (o echo termina com sucesso) e geraria um output vazio.
+          migration_repo="$(terraform output -raw migration_image_repository)"
+          registry_login="$(terraform output -raw registry_login_command)"
+          # SHA curto fixo em 7 caracteres. O deploy-app.sh usa `git rev-parse --short` (que
+          # pode crescer) e o sufixo -dirty, que nunca se aplica a um checkout limpo do CI.
           tag="${GITHUB_SHA::7}"
           {
             echo "exists=true"
             echo "tag=$tag"
             echo "api_image=$api_repo:$tag"
-            echo "migration_image=$(terraform output -raw migration_image_repository):$tag"
-            echo "registry_login=$(terraform output -raw registry_login_command)"
+            echo "migration_image=$migration_repo:$tag"
+            echo "registry_login=$registry_login"
           } >> "$GITHUB_OUTPUT"
 
       - name: Login no ACR
@@ -180,7 +191,8 @@ jobs:
           docker push "$API_IMAGE"
 
       # Estágio `build` (tem o Prisma CLI), usado pelos Jobs de migration e bootstrap-admin.
-      # Sem Trivy: tem dependências de desenvolvimento e nunca recebe tráfego.
+      # Sem Trivy: tem dependências de desenvolvimento e nunca recebe tráfego. Reaproveita o
+      # cache do builder deste job, então a camada base é a que acabou de ser refeita sem cache.
       - name: Build e publicação da imagem dos Jobs
         if: steps.infra.outputs.exists == 'true'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -216,7 +228,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # Pushes seguidos rodam `ci` e `image` em paralelo, e o grupo deploy-staging só evita
+      # deploys simultâneos, não garante a ordem. Se a main já avançou, este deploy é pulado
+      # (sem falhar): a execução do commit mais novo faz o deploy. Disparo manual não é pulado.
+      - name: Conferir se é o commit mais recente da main
+        id: latest
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            head="$(git ls-remote origin refs/heads/main | cut -f1)"
+            if [[ "$head" != "$GITHUB_SHA" ]]; then
+              echo "::notice title=Deploy pulado::A main já está em ${head::7}; o deploy fica com a execução desse commit."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
       - name: Login na Azure (OIDC)
+        if: steps.latest.outputs.skip != 'true'
         uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
@@ -224,6 +253,7 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Setup Terraform
+        if: steps.latest.outputs.skip != 'true'
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_version: 1.16.4
@@ -231,10 +261,12 @@ jobs:
 
       # configure_kubectl do lib.sh. kubectl e az já vêm no runner ubuntu-24.04.
       - name: Configurar kubectl
+        if: steps.latest.outputs.skip != 'true'
         working-directory: infra/azure
         run: |
           terraform init -input=false -backend-config=backend.hcl
           eval "$(terraform output -raw kubeconfig_command)"
+          # Não existe no script: falha aqui, com mensagem clara, se o kubeconfig não funcionar.
           kubectl get nodes
           {
             echo "INGRESS_NAMESPACE=$(terraform output -raw ingress_namespace)"
@@ -244,7 +276,10 @@ jobs:
 
       # Bloco 4 do deploy-app.sh. Na Azure o Load Balancer só tem IP, então o host usa o DNS
       # curinga nip.io (<ip>.nip.io resolve para <ip>), sem precisar de domínio próprio.
+      # Roda antes dos Jobs (no script, roda depois): o host é necessário para renderizar o
+      # overlay `cloud` no step seguinte, e sem IP o deploy falha antes de mexer no banco.
       - name: Descobrir o host do Ingress
+        if: steps.latest.outputs.skip != 'true'
         run: |
           address="$(kubectl get service -n "$INGRESS_NAMESPACE" \
             -o jsonpath='{range .items[?(@.spec.type=="LoadBalancer")]}{.status.loadBalancer.ingress[0].hostname}{.status.loadBalancer.ingress[0].ip}{end}')"
@@ -261,6 +296,7 @@ jobs:
       # render_overlay do deploy-app.sh: overlay temporário que troca as imagens locais pelas
       # do ACR com a tag do commit, sem alterar arquivos versionados.
       - name: Renderizar overlays com as imagens do commit
+        if: steps.latest.outputs.skip != 'true'
         run: |
           for overlay in cloud-migration cloud-bootstrap-admin cloud; do
             mkdir -p "$RENDER_DIR/$overlay"
@@ -293,6 +329,7 @@ jobs:
       # Bloco 3 do deploy-app.sh (run_job). Jobs são imutáveis: remove o anterior, aplica o
       # novo e espera concluir. A ordem importa: o admin depende das tabelas criadas aqui.
       - name: Job de migration (prisma migrate deploy)
+        if: steps.latest.outputs.skip != 'true'
         run: |
           kubectl delete job garage-flow-migration --ignore-not-found --wait=true
           kubectl apply -k "$RENDER_DIR/cloud-migration"
@@ -305,6 +342,7 @@ jobs:
 
       # Idempotente: cria o primeiro admin só se ele ainda não existir.
       - name: Job de bootstrap do admin
+        if: steps.latest.outputs.skip != 'true'
         run: |
           kubectl delete job garage-flow-bootstrap-admin --ignore-not-found --wait=true
           kubectl apply -k "$RENDER_DIR/cloud-bootstrap-admin"
@@ -317,6 +355,7 @@ jobs:
 
       # ConfigMap, Deployment, Service, Ingress e HPA.
       - name: Aplicar manifestos da API
+        if: steps.latest.outputs.skip != 'true'
         run: |
           kubectl apply -k "$RENDER_DIR/cloud"
           kubectl rollout status deployment/garage-flow-deployment --timeout=300s
@@ -324,6 +363,7 @@ jobs:
       # Não existe no deploy-app.sh: confirma de fora do cluster, pelo Ingress, que a versão
       # nova responde. /ready também checa a conexão com o banco.
       - name: Health check
+        if: steps.latest.outputs.skip != 'true'
         run: |
           for path in health ready; do
             echo "GET http://$INGRESS_HOST/$path"
@@ -334,6 +374,7 @@ jobs:
           done
 
       - name: Resumo do deploy
+        if: steps.latest.outputs.skip != 'true'
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<MD
           ### Deploy concluído (imagem \`$IMAGE_TAG\`)
