@@ -134,6 +134,29 @@ describe('ClientController (integration)', () => {
         .send({ ...payload, phone: '11977776666' })
         .expect(409);
     });
+
+    it('returns 409 when the phone is already registered', async () => {
+      const payload = {
+        cpfCnpj: '52998224725',
+        name: 'João da Silva',
+        phone: '11999998888',
+        address: 'Rua das Flores, 123',
+      };
+
+      await request(app.getHttpServer())
+        .post('/clients')
+        .set('Authorization', adminAuthHeader())
+        .send(payload)
+        .expect(201);
+
+      const response = await request(app.getHttpServer())
+        .post('/clients')
+        .set('Authorization', adminAuthHeader())
+        .send({ ...payload, cpfCnpj: '11222333000181' })
+        .expect(409);
+
+      expect(response.body.message).toBe('Client with the same CPF/CNPJ or phone already exists');
+    });
   });
 
   describe('GET /clients', () => {
@@ -201,6 +224,26 @@ describe('ClientController (integration)', () => {
         .expect(200);
 
       expect(response.body).toMatchObject({ name: 'João Pereira', phone: '11955554444' });
+    });
+
+    it('returns 409 when the new phone belongs to another client', async () => {
+      await prisma.client.create({
+        data: { cpfCnpj: '11222333000181', name: 'Outro', phone: '11955554444', address: 'Rua B' },
+      });
+      const client = await prisma.client.create({
+        data: {
+          cpfCnpj: '52998224725',
+          name: 'João da Silva',
+          phone: '11999998888',
+          address: 'Rua das Flores, 123',
+        },
+      });
+
+      await request(app.getHttpServer())
+        .patch(`/clients/${client.id}`)
+        .set('Authorization', adminAuthHeader())
+        .send({ phone: '11955554444' })
+        .expect(409);
     });
 
     it('returns 400 when the body includes cpfCnpj (not part of the update DTO)', async () => {
