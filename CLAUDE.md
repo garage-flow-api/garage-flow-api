@@ -61,7 +61,17 @@ Entities extend `BaseEntity` (`src/common/entities/base.entity.ts`): private con
 
 ### Error flow
 
-Value objects/domain code throw `DomainError` subclasses (e.g. `InvalidCpfCnpjError`, `InvalidLicensePlateError`). These propagate uncaught by default: `GlobalExceptionFilter` (`src/common/filters/global-exception.filter.ts`, registered in `main.ts`) is a catch-all — `HttpException`s pass through as-is, any `DomainError` becomes a uniform 400 with the domain message, anything else becomes a 500 with a generic message. A use-case only adds its own `try/catch` when it needs to *change* that default outcome — e.g. `find-service-order-by-tracking-token.use-case.ts` maps any token-resolution failure to a 404 instead of the filter's default 400.
+Domain and application code throw `DomainError` or one of its subclasses from `src/common/errors/domain.error.ts` — never Nest `*Exception`s (an ESLint `no-restricted-imports` rule blocks them in `domain/` and `application/`). Value objects throw their own subclasses (e.g. `InvalidCpfCnpjError`, `InvalidLicensePlateError`). These propagate uncaught by default: `GlobalExceptionFilter` (`src/common/filters/global-exception.filter.ts`, registered in `main.ts`) is a catch-all — `HttpException`s pass through as-is, and a `DomainError` is answered with the domain message and a status chosen by its class:
+
+| Error class | HTTP status |
+|---|---|
+| `NotFoundError` | 404 |
+| `ConflictError` | 409 |
+| `BusinessRuleError` | 422 |
+| `UnauthorizedError` | 401 |
+| `DomainError` and any other subclass | 400 |
+
+Anything else becomes a 500 with a generic message. A use-case only adds its own `try/catch` when it needs to *change* that default outcome — e.g. `find-service-order-by-tracking-token.use-case.ts` turns the `InvalidTrackingTokenError` (400 by default) into a `NotFoundError` (404).
 
 ### Repository pattern
 
