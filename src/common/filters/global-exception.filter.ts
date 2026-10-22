@@ -7,18 +7,20 @@ import {
   Logger,
 } from '@nestjs/common';
 import { type Request, type Response } from 'express';
-import {
-  BusinessRuleError,
-  ConflictError,
-  DomainError,
-  NotFoundError,
-  UnauthorizedError,
-} from '@common/errors/domain.error';
+import { DomainError, type DomainErrorCode } from '@common/errors/domain.error';
 
 type HttpExceptionResponse = {
   message?: string | string[];
 };
 
+const HTTP_STATUS_BY_DOMAIN_CODE: Record<DomainErrorCode, HttpStatus> = {
+  INVALID_INPUT: HttpStatus.BAD_REQUEST,
+  NOT_FOUND: HttpStatus.NOT_FOUND,
+  CONFLICT: HttpStatus.CONFLICT,
+  BUSINESS_RULE_VIOLATION: HttpStatus.UNPROCESSABLE_ENTITY,
+  UNAUTHORIZED: HttpStatus.UNAUTHORIZED,
+  FORBIDDEN: HttpStatus.FORBIDDEN,
+};
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name);
@@ -85,10 +87,6 @@ export class GlobalExceptionFilter implements ExceptionFilter {
   }
 
   private statusFor(error: DomainError): HttpStatus {
-    if (error instanceof NotFoundError) return HttpStatus.NOT_FOUND;
-    if (error instanceof ConflictError) return HttpStatus.CONFLICT;
-    if (error instanceof BusinessRuleError) return HttpStatus.UNPROCESSABLE_ENTITY;
-    if (error instanceof UnauthorizedError) return HttpStatus.UNAUTHORIZED;
-    return HttpStatus.BAD_REQUEST;
+    return HTTP_STATUS_BY_DOMAIN_CODE[error.code];
   }
 }

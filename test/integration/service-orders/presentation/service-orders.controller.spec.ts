@@ -348,7 +348,7 @@ describe('ServiceOrdersController (integration)', () => {
     expect(response.body.status).toBe('FINISHED_DIAGNOSIS');
   });
 
-  it('PATCH /service-orders/:id/add-services-and-parts deve retornar 400 ao tentar adicionar itens novamente sem voltar para IN_DIAGNOSIS', async () => {
+  it('PATCH /service-orders/:id/add-services-and-parts deve retornar 422 ao tentar adicionar itens novamente sem voltar para IN_DIAGNOSIS', async () => {
     const created = await request(app.getHttpServer())
       .post('/service-orders')
       .set('Authorization', adminAuthHeader())
@@ -365,7 +365,7 @@ describe('ServiceOrdersController (integration)', () => {
       .set('Authorization', mechanicAuthHeader())
       .send({ services: [], parts: [{ inventoryId: partId, quantity: 1 }] });
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(422);
   });
 
   it('PATCH /service-orders/:id/add-services-and-parts deve retornar 404 se a OS não existir', async () => {
@@ -392,7 +392,32 @@ describe('ServiceOrdersController (integration)', () => {
     expect(response.status).toBe(422);
   });
 
-  it('PATCH /service-orders/:id/add-services-and-parts deve retornar 400 se a OS não estiver em diagnóstico', async () => {
+  it('PATCH /service-orders/:id/add-services-and-parts deve retornar 403 se outro mecânico tentar finalizar o diagnóstico', async () => {
+    const created = await request(app.getHttpServer())
+      .post('/service-orders')
+      .set('Authorization', adminAuthHeader())
+      .send({ clientCpfCnpj, licensePlate, description: 'Ruído no motor' });
+    await putServiceOrderInDiagnosis(created.body.id);
+
+    const otherMechanic = await prisma.user.create({
+      data: {
+        name: 'Outro Mecânico',
+        email: 'outro@teste.com',
+        passwordHash: 'hash',
+        role: 'MECHANIC',
+      },
+    });
+    const otherMechanicHeader = `Bearer ${jwtService.sign({ sub: otherMechanic.id, role: 'MECHANIC' })}`;
+
+    const response = await request(app.getHttpServer())
+      .patch(`/service-orders/${created.body.id}/add-services-and-parts`)
+      .set('Authorization', otherMechanicHeader)
+      .send({ services: [{ serviceId }], parts: [] });
+
+    expect(response.status).toBe(403);
+  });
+
+  it('PATCH /service-orders/:id/add-services-and-parts deve retornar 422 se a OS não estiver em diagnóstico', async () => {
     const created = await request(app.getHttpServer())
       .post('/service-orders')
       .set('Authorization', adminAuthHeader())
@@ -403,7 +428,7 @@ describe('ServiceOrdersController (integration)', () => {
       .set('Authorization', mechanicAuthHeader())
       .send({ services: [{ serviceId }], parts: [] });
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(422);
   });
 
   it('PATCH /service-orders/:id/budget deve gerar o orçamento quando a OS possui itens', async () => {
