@@ -1,6 +1,7 @@
 import { BusinessRuleError, NotFoundError } from '@common/errors/domain.error';
 import { Injectable } from '@nestjs/common';
 
+import { type ServiceOrder } from '@service-orders/domain/entities/service-order.entity';
 import { ServiceOrderRepository } from '@service-orders/domain/repositories/service-order.repository';
 import { ServiceOrderStatus } from '@service-orders/domain/value-objects/service-order-status.vo';
 import { FindVehicleByIdUseCase } from '@vehicle/application/use-cases/find-vehicle-by-id.use-case';
@@ -41,6 +42,24 @@ export interface ServiceOrderBudget {
   generatedAt: Date;
 }
 
+type BudgetClient = Awaited<ReturnType<FindClientByIdUseCase['execute']>>;
+type BudgetVehicle = Awaited<ReturnType<FindVehicleByIdUseCase['execute']>>;
+
+interface BudgetRelations {
+  vehicle: BudgetVehicle;
+  client: BudgetClient;
+  services: ServiceEntity[];
+  parts: Part[];
+}
+
+interface BudgetParts {
+  serviceOrder: ServiceOrder;
+  client: BudgetClient;
+  vehicle: BudgetVehicle;
+  serviceLines: ServiceOrderBudgetLineItem[];
+  partLines: ServiceOrderBudgetLineItem[];
+}
+
 @Injectable()
 export class GenerateServiceOrderBudgetUseCase {
   constructor(
@@ -52,6 +71,18 @@ export class GenerateServiceOrderBudgetUseCase {
   ) {}
 
   async execute(id: string): Promise<ServiceOrderBudget> {
+    const serviceOrder = await this.findServiceOrderWithBudgetAccess(id);
+    const { vehicle, client, services, parts } = await this.loadBudgetRelations(serviceOrder);
+
+    const serviceLines = this.buildServiceLines(serviceOrder, services);
+    const partLines = this.buildPartLines(serviceOrder, parts);
+
+    await this.submitForApprovalIfDiagnosisFinished(serviceOrder);
+
+    return this.toBudget({ serviceOrder, client, vehicle, serviceLines, partLines });
+  }
+
+  private async findServiceOrderWithBudgetAccess(id: string): Promise<ServiceOrder> {
     const serviceOrder = await this.serviceOrderRepository.findById(id);
     if (!serviceOrder) throw new NotFoundError('Service order not found');
 
@@ -65,7 +96,10 @@ export class GenerateServiceOrderBudgetUseCase {
         'Cannot generate a budget for a service order without services or parts',
       );
     }
+    return serviceOrder;
+  }
 
+  private async loadBudgetRelations(serviceOrder: ServiceOrder): Promise<BudgetRelations> {
     const [vehicle, services, parts] = await Promise.all([
       this.findVehicleById.execute(serviceOrder.vehicleId),
       serviceOrder.serviceItems.length > 0
@@ -76,13 +110,18 @@ export class GenerateServiceOrderBudgetUseCase {
         : Promise.resolve([]),
     ]);
     const client = await this.findClientById.execute(vehicle.clientId);
+    return { vehicle, client, services, parts };
+  }
 
+  private buildServiceLines(
+    serviceOrder: ServiceOrder,
+    services: ServiceEntity[],
+  ): ServiceOrderBudgetLineItem[] {
     const servicesById = new Map<string, ServiceEntity>(
       services.map((service) => [service.id, service]),
     );
-    const partsById = new Map<string, Part>(parts.map((part) => [part.id, part]));
 
-    const serviceLineItems: ServiceOrderBudgetLineItem[] = serviceOrder.serviceItems.map((item) => {
+    return serviceOrder.serviceItems.map((item) => {
       const service = servicesById.get(item.serviceId);
       if (!service?.name) {
         throw new NotFoundError(`Service not found: ${item.serviceId}`);
@@ -95,8 +134,12 @@ export class GenerateServiceOrderBudgetUseCase {
         subtotal: item.price,
       };
     });
+  }
 
-    const partLineItems: ServiceOrderBudgetLineItem[] = serviceOrder.partItems.map((item) => {
+  private buildPartLines(serviceOrder: ServiceOrder, parts: Part[]): ServiceOrderBudgetLineItem[] {
+    const partsById = new Map<string, Part>(parts.map((part) => [part.id, part]));
+
+    return serviceOrder.partItems.map((item) => {
       const part = partsById.get(item.inventoryId);
       if (!part) {
         throw new NotFoundError(`Part not found: ${item.inventoryId}`);
@@ -109,11 +152,17 @@ export class GenerateServiceOrderBudgetUseCase {
         subtotal: item.quantity * item.unitPrice,
       };
     });
+  }
 
-    if (serviceOrder.status === ServiceOrderStatus.FINISHED_DIAGNOSIS) {
-      serviceOrder.submitBudgetForApproval();
-      await this.serviceOrderRepository.save(serviceOrder);
-    }
+  private async submitForApprovalIfDiagnosisFinished(serviceOrder: ServiceOrder): Promise<void> {
+    if (serviceOrder.status !== ServiceOrderStatus.FINISHED_DIAGNOSIS) return;
+
+    serviceOrder.submitBudgetForApproval();
+    await this.serviceOrderRepository.save(serviceOrder);
+  }
+
+  private toBudget(parts: BudgetParts): ServiceOrderBudget {
+    const { serviceOrder, client, vehicle, serviceLines, partLines } = parts;
 
     return {
       serviceOrderId: serviceOrder.id,
@@ -132,8 +181,8 @@ export class GenerateServiceOrderBudgetUseCase {
         licensePlate: vehicle.licensePlate.value,
         year: vehicle.year,
       },
-      services: serviceLineItems,
-      parts: partLineItems,
+      services: serviceLines,
+      parts: partLines,
       totalAmount: serviceOrder.totalAmount,
       generatedAt: new Date(),
     };

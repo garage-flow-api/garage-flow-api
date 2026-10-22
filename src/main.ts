@@ -1,4 +1,4 @@
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, type INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
@@ -10,19 +10,26 @@ type SwaggerOperation = {
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.useGlobalFilters(new GlobalExceptionFilter());
 
+  configureGlobalBehavior(app);
+  configureSwagger(app);
+
+  await app.listen(process.env.PORT ?? 3000);
+}
+
+function configureGlobalBehavior(app: INestApplication): void {
+  app.useGlobalFilters(new GlobalExceptionFilter());
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
-      transformOptions: {
-        enableImplicitConversion: true,
-      },
+      transformOptions: { enableImplicitConversion: true },
     }),
   );
+}
 
+function configureSwagger(app: INestApplication): void {
   const config = new DocumentBuilder()
     .setTitle('Garage Flow API')
     .setDescription('Garage Flow API')
@@ -40,31 +47,26 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document, {
-    swaggerOptions: {
-      operationsSorter: (a: SwaggerOperation, b: SwaggerOperation) => {
-        const methodOrder: Record<string, number> = {
-          post: 1,
-          get: 2,
-          put: 3,
-          patch: 4,
-          delete: 5,
-        };
-
-        const methodA = a.get('method');
-        const methodB = b.get('method');
-
-        const methodDiff = methodOrder[methodA] - methodOrder[methodB];
-
-        if (methodDiff !== 0) {
-          return methodDiff;
-        }
-
-        return a.get('path').localeCompare(b.get('path'));
-      },
-    },
+    swaggerOptions: { operationsSorter: compareOperationsByMethodThenPath },
   });
+}
 
-  await app.listen(process.env.PORT ?? 3000);
+/**
+ * Ordena o Swagger por método (POST, GET, PUT, PATCH, DELETE) e depois por caminho.
+ */
+function compareOperationsByMethodThenPath(a: SwaggerOperation, b: SwaggerOperation): number {
+  const methodOrder: Record<string, number> = {
+    post: 1,
+    get: 2,
+    put: 3,
+    patch: 4,
+    delete: 5,
+  };
+
+  const methodDiff = methodOrder[a.get('method')] - methodOrder[b.get('method')];
+  if (methodDiff !== 0) return methodDiff;
+
+  return a.get('path').localeCompare(b.get('path'));
 }
 
 void bootstrap();
