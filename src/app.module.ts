@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { HealthModule } from '@infra/health/health.module';
+import { MonitoringModule } from '@infra/monitoring/monitoring.module';
 import { PrismaModule } from '@infra/database/prisma/prisma.module';
 import { InventoryModule } from '@inventory/inventory.module';
 import { ClientModule } from '@client/client.module';
@@ -10,7 +10,7 @@ import { ServiceOrdersModule } from '@service-orders/service-orders.module';
 
 @Module({
   imports: [
-    HealthModule,
+    MonitoringModule,
     PrismaModule,
     AuthModule,
     ServiceModule,
