@@ -50,6 +50,7 @@ import { ServiceOrderBudgetResponseDto } from '@service-orders/presentation/dtos
 import { ServiceOrderCreatedResponseDto } from '@service-orders/presentation/dtos/service-order-created-response.dto';
 import { ServiceOrderTrackingResponseDto } from '@service-orders/presentation/dtos/service-order-tracking-response.dto';
 import { ServiceOrderTrackingLinkResponseDto } from '@service-orders/presentation/dtos/service-order-tracking-link-response.dto';
+import { ServiceOrderDetailResponseDto } from '@service-orders/presentation/dtos/service-order-detail-response.dto';
 import { AverageExecutionTimeResponseDto } from '@service-orders/presentation/dtos/average-execution-time-response.dto';
 import { AverageExecutionTimeQueryDto } from '@service-orders/presentation/dtos/average-execution-time-query.dto';
 import { AddServicesAndPartsResponseDto } from '@service-orders/presentation/dtos/add-services-and-parts-response.dto';
@@ -159,12 +160,14 @@ export class ServiceOrdersController {
   @ApiAuth()
   @ApiOperation({
     summary: 'Retrieves a service order by ID',
+    description:
+      'The status is returned in the client-facing terms: Recebida, Diagnóstico, Aguardando aprovação, Execução, Finalizada, Entregue or Cancelada.',
   })
-  @ApiOkResponse({ type: ServiceOrderResponseDto })
+  @ApiOkResponse({ type: ServiceOrderDetailResponseDto })
   @ApiNotFoundResponse({ type: ErrorResponseDto, description: 'Service order not found' })
-  async findOne(@Param('id', ParseUUIDPipe) id: string): Promise<ServiceOrderResponseDto> {
+  async findOne(@Param('id', ParseUUIDPipe) id: string): Promise<ServiceOrderDetailResponseDto> {
     const serviceOrder = await this.findServiceOrderById.execute(id);
-    return ServiceOrderResponseDto.fromEntity(serviceOrder);
+    return ServiceOrderDetailResponseDto.fromEntity(serviceOrder);
   }
 
   @Get(':id/tracking-link')
