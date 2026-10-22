@@ -1,4 +1,4 @@
-import { BusinessRuleError, DomainError, NotFoundError } from '@common/errors/domain.error';
+import { DomainError, NotFoundError } from '@common/errors/domain.error';
 import { Injectable } from '@nestjs/common';
 
 import { ServiceOrder } from '@service-orders/domain/entities/service-order.entity';
@@ -10,6 +10,7 @@ import { CheckPartsAvailabilityUseCase } from '@inventory/application/use-cases/
 import { type StockLevel } from '@inventory/domain/value-objects/stock-level.vo';
 import { FindServicesByIdListUseCase } from '@service/application/use-cases/find-services-by-id-list.use-case';
 import { CalculateTotalAmountUseCase } from '@service-orders/application/use-cases/calculate-total-amount.use-case';
+import { InsufficientStockError } from '@inventory/domain/errors/insufficient-stock.error';
 
 /**
  * Além da OS atualizada, mostra as peças recém-adicionadas cujo estoque lógico
@@ -56,8 +57,10 @@ export class AddServicesAndPartsUseCase {
         const unavailable = availabilities.find((availability) => !availability.isAvailable);
         if (unavailable) {
           const { part, availableQuantity } = unavailable.stockLevel;
-          throw new BusinessRuleError(
-            `Unavailable quantity for part ${part.name}. Available: ${availableQuantity}, requested: ${unavailable.requestedQuantity}`,
+          throw new InsufficientStockError(
+            part.name,
+            availableQuantity,
+            unavailable.requestedQuantity,
           );
         }
 
