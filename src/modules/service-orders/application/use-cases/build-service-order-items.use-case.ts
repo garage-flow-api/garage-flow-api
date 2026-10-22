@@ -1,10 +1,11 @@
-import { BusinessRuleError, DomainError, NotFoundError } from '@common/errors/domain.error';
+import { DomainError, NotFoundError } from '@common/errors/domain.error';
 import { Injectable } from '@nestjs/common';
 
 import { ServiceItem } from '@service-orders/domain/entities/service-item.entity';
 import { PartItem } from '@service-orders/domain/entities/part-item.entity';
 import { CheckPartsAvailabilityUseCase } from '@inventory/application/use-cases/check-parts-availability.use-case';
 import { FindServicesByIdListUseCase } from '@service/application/use-cases/find-services-by-id-list.use-case';
+import { InsufficientStockError } from '@inventory/domain/errors/insufficient-stock.error';
 
 export interface ServiceOrderItemsInput {
   services?: { serviceId: string }[];
@@ -74,9 +75,7 @@ export class BuildServiceOrderItemsUseCase {
     if (!unavailable) return;
 
     const { part, availableQuantity } = unavailable.stockLevel;
-    throw new BusinessRuleError(
-      `Unavailable quantity for part ${part.name}. Available: ${availableQuantity}, requested: ${unavailable.requestedQuantity}`,
-    );
+    throw new InsufficientStockError(part.name, availableQuantity, unavailable.requestedQuantity);
   }
 
   private rejectRepeatedParts(parts: RequestedParts): void {
