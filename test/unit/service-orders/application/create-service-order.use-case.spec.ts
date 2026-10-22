@@ -1,76 +1,132 @@
 import { BusinessRuleError, NotFoundError } from '@common/errors/domain.error';
-
-import { CreateServiceOrderUseCase } from '@service-orders/application/use-cases/create-service-order.use-case';
+import { type TransactionRunner } from '@common/application/transaction-runner';
+import { type EnsureClientUseCase } from '@client/application/use-cases/ensure-client.use-case';
+import { type EnsureVehicleUseCase } from '@vehicle/application/use-cases/ensure-vehicle.use-case';
+import { ServiceItem } from '@service-orders/domain/entities/service-item.entity';
 import { type ServiceOrderRepository } from '@service-orders/domain/repositories/service-order.repository';
-import { type CreateServiceOrderDto } from '@service-orders/presentation/dtos/create-service-order.dto';
-import { ServiceOrderStatus } from '@service-orders/domain/value-objects/service-order-status.vo';
-import { type FindClientByCpfCnpjUseCase } from '@client/application/use-cases/find-client-by-cpf-cnpj.use-case';
-import { type FindVehicleByLicensePlateUseCase } from '@vehicle/application/use-cases/find-vehicle-by-license-plate.use-case';
+import { type BuildServiceOrderItemsUseCase } from '@service-orders/application/use-cases/build-service-order-items.use-case';
+import { type CalculateTotalAmountUseCase } from '@service-orders/application/use-cases/calculate-total-amount.use-case';
+import {
+  CreateServiceOrderUseCase,
+  type OpenServiceOrderInput,
+} from '@service-orders/application/use-cases/create-service-order.use-case';
 
 describe('CreateServiceOrderUseCase', () => {
-  let repository: jest.Mocked<ServiceOrderRepository>;
-  let findClientByCpfCnpj: { execute: jest.Mock };
-  let findVehicleByLicensePlate: { execute: jest.Mock };
+  let repository: { save: jest.Mock };
+  let transactionRunner: { run: jest.Mock };
+  let ensureClient: { execute: jest.Mock };
+  let ensureVehicle: { execute: jest.Mock };
+  let buildItems: { execute: jest.Mock };
+  let calculateTotal: { execute: jest.Mock };
   let useCase: CreateServiceOrderUseCase;
+  let calls: string[];
 
-  const client = { id: 'client-1' };
-  const vehicle = { id: 'vehicle-1', clientId: 'client-1' };
+  const input: OpenServiceOrderInput = {
+    client: { cpfCnpj: '123.456.789-09', name: 'João', phone: '11999999999', address: 'Rua A, 1' },
+    vehicle: { licensePlate: 'ABC1D23', brand: 'Fiat', model: 'Uno', year: 2020 },
+    description: 'Barulho ao freiar',
+    services: [{ serviceId: 'service-1' }],
+    parts: [{ inventoryId: 'part-1', quantity: 1 }],
+  };
 
   beforeEach(() => {
+    calls = [];
     repository = {
-      save: jest.fn((serviceOrder) => Promise.resolve(serviceOrder)),
-      findById: jest.fn(),
-      findAll: jest.fn(),
-      findAverageExecutionTime: jest.fn(),
+      save: jest.fn((os) => {
+        calls.push('save');
+        return Promise.resolve(os);
+      }),
     };
-    findClientByCpfCnpj = { execute: jest.fn().mockResolvedValue(client) };
-    findVehicleByLicensePlate = { execute: jest.fn().mockResolvedValue(vehicle) };
+    transactionRunner = {
+      run: jest.fn((work: () => Promise<unknown>) => {
+        calls.push('transaction');
+        return work();
+      }),
+    };
+    ensureClient = { execute: jest.fn().mockResolvedValue({ id: 'client-1' }) };
+    ensureVehicle = { execute: jest.fn().mockResolvedValue({ id: 'vehicle-1' }) };
+    buildItems = {
+      execute: jest.fn().mockResolvedValue({
+        serviceItems: [ServiceItem.create('service-1', 100)],
+        partItems: [],
+      }),
+    };
+    calculateTotal = { execute: jest.fn().mockResolvedValue(100) };
 
     useCase = new CreateServiceOrderUseCase(
-      repository,
-      findClientByCpfCnpj as unknown as FindClientByCpfCnpjUseCase,
-      findVehicleByLicensePlate as unknown as FindVehicleByLicensePlateUseCase,
+      repository as unknown as ServiceOrderRepository,
+      transactionRunner as unknown as TransactionRunner,
+      ensureClient as unknown as EnsureClientUseCase,
+      ensureVehicle as unknown as EnsureVehicleUseCase,
+      buildItems as unknown as BuildServiceOrderItemsUseCase,
+      calculateTotal as unknown as CalculateTotalAmountUseCase,
     );
   });
 
-  const buildDto = (): CreateServiceOrderDto => ({
-    clientCpfCnpj: '123.456.789-00',
-    licensePlate: 'ABC1D23',
-    description: 'Ruído no motor',
+  it('abre a OS com o cliente, o veículo e os itens informados', async () => {
+    const serviceOrder = await useCase.execute(input);
+
+    expect(ensureClient.execute).toHaveBeenCalledWith(input.client);
+    expect(ensureVehicle.execute).toHaveBeenCalledWith({
+      ...input.vehicle,
+      clientId: 'client-1',
+    });
+    expect(serviceOrder.vehicleId).toBe('vehicle-1');
+    expect(serviceOrder.description).toBe(input.description);
+    expect(serviceOrder.serviceItems).toHaveLength(1);
+    expect(serviceOrder.totalAmount).toBe(100);
+    expect(repository.save).toHaveBeenCalledWith(serviceOrder);
   });
 
-  it('deve criar a OS com status RECEIVED, sem itens, valor total zerado e a descrição informada', async () => {
-    const os = await useCase.execute(buildDto());
+  it('monta e valida os itens antes de abrir a transação', async () => {
+    await useCase.execute(input);
 
-    expect(os.status).toBe(ServiceOrderStatus.RECEIVED);
-    expect(os.vehicleId).toBe('vehicle-1');
-    expect(os.description).toBe('Ruído no motor');
-    expect(os.serviceItems).toEqual([]);
-    expect(os.partItems).toEqual([]);
-    expect(os.totalAmount).toBe(0);
-    expect(repository.save).toHaveBeenCalledWith(os);
+    expect(buildItems.execute).toHaveBeenCalledWith({
+      services: input.services,
+      parts: input.parts,
+    });
+    expect(calls).toEqual(['transaction', 'save']);
+    expect(buildItems.execute.mock.invocationCallOrder[0]).toBeLessThan(
+      transactionRunner.run.mock.invocationCallOrder[0],
+    );
   });
 
-  it('deve lançar BusinessRuleError se o veículo não pertencer ao cliente', async () => {
-    findVehicleByLicensePlate.execute.mockResolvedValue({
-      id: 'vehicle-1',
-      clientId: 'outro-cliente',
+  it('não abre transação nem grava nada se um item for inválido', async () => {
+    buildItems.execute.mockRejectedValue(new BusinessRuleError('Unavailable quantity for part'));
+
+    await expect(useCase.execute(input)).rejects.toThrow(BusinessRuleError);
+    expect(transactionRunner.run).not.toHaveBeenCalled();
+    expect(ensureClient.execute).not.toHaveBeenCalled();
+    expect(repository.save).not.toHaveBeenCalled();
+  });
+
+  it('propaga o erro do veículo e não salva a OS', async () => {
+    ensureVehicle.execute.mockRejectedValue(
+      new BusinessRuleError('Vehicle does not belong to the informed client'),
+    );
+
+    await expect(useCase.execute(input)).rejects.toThrow(BusinessRuleError);
+    expect(repository.save).not.toHaveBeenCalled();
+  });
+
+  it('propaga o erro quando uma peça não existe', async () => {
+    buildItems.execute.mockRejectedValue(new NotFoundError('Part not found'));
+
+    await expect(useCase.execute(input)).rejects.toThrow(NotFoundError);
+    expect(transactionRunner.run).not.toHaveBeenCalled();
+  });
+
+  it('abre a OS sem serviços nem peças quando eles não são informados', async () => {
+    buildItems.execute.mockResolvedValue({ serviceItems: [], partItems: [] });
+    calculateTotal.execute.mockResolvedValue(0);
+
+    const serviceOrder = await useCase.execute({
+      client: input.client,
+      vehicle: input.vehicle,
+      description: input.description,
     });
 
-    await expect(useCase.execute(buildDto())).rejects.toThrow(BusinessRuleError);
-  });
-
-  it('deve propagar NotFoundError se o cliente não existir', async () => {
-    findClientByCpfCnpj.execute.mockRejectedValue(new NotFoundError('Cliente não encontrado'));
-
-    await expect(useCase.execute(buildDto())).rejects.toThrow(NotFoundError);
-  });
-
-  it('deve propagar NotFoundError se o veículo não existir', async () => {
-    findVehicleByLicensePlate.execute.mockRejectedValue(
-      new NotFoundError('Veículo não encontrado'),
-    );
-
-    await expect(useCase.execute(buildDto())).rejects.toThrow(NotFoundError);
+    expect(serviceOrder.serviceItems).toHaveLength(0);
+    expect(serviceOrder.totalAmount).toBe(0);
   });
 });

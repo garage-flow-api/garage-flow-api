@@ -20,6 +20,7 @@ import {
   ApiForbiddenResponse,
   ApiNoContentResponse,
   ApiNotFoundResponse,
+  ApiConflictResponse,
   ApiOkResponse,
   ApiOperation,
   ApiQuery,
@@ -103,17 +104,27 @@ export class ServiceOrdersController {
   @Post()
   @ApiAuth('ADMIN', 'SERVICE_ADVISOR')
   @ApiOperation({
-    summary: 'Creates a new service order',
+    summary: 'Opens a service order in a single request',
+    description:
+      'Reuses the client (by CPF/CNPJ) and the vehicle (by license plate), creating them when they ' +
+      'do not exist yet. Services and parts are optional. Everything is saved in one transaction: ' +
+      'if any step fails, nothing is persisted.',
   })
   @ApiCreatedResponse({ type: ServiceOrderCreatedResponseDto })
-  @ApiNotFoundResponse({ type: ErrorResponseDto, description: 'Client or vehicle not found' })
   @ApiBadRequestResponse({
     type: ErrorResponseDto,
-    description: 'Invalid payload, CPF/CNPJ or license plate',
+    description:
+      'Invalid payload, invalid CPF/CNPJ or license plate, repeated part, or missing data ' +
+      '(name, phone, address / brand, model, year) for a new client or vehicle',
+  })
+  @ApiNotFoundResponse({ type: ErrorResponseDto, description: 'Service or part not found' })
+  @ApiConflictResponse({
+    type: ErrorResponseDto,
+    description: 'Phone already registered for another client',
   })
   @ApiUnprocessableEntityResponse({
     type: ErrorResponseDto,
-    description: 'Vehicle does not belong to the informed client',
+    description: 'Vehicle belongs to another client, or unavailable quantity for a part',
   })
   async create(
     @Body() dto: CreateServiceOrderDto,
