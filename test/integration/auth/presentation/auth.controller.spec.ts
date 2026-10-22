@@ -127,11 +127,11 @@ describe('AuthController (integration)', () => {
         .expect(200);
     });
 
-    it('returns 404 for an unknown email', async () => {
+    it('returns 401 for an unknown email', async () => {
       await request(app.getHttpServer())
         .post('/auth/login')
         .send({ email: 'unknown@example.com', password: 'Password123' })
-        .expect(404);
+        .expect(401);
     });
 
     it('returns 401 for the wrong password', async () => {
@@ -152,7 +152,7 @@ describe('AuthController (integration)', () => {
         .expect(401);
     });
 
-    it('returns 404 for a soft-deleted user', async () => {
+    it('returns 401 for a soft-deleted user', async () => {
       const createResponse = await request(app.getHttpServer())
         .post('/auth/users')
         .set('Authorization', adminAuthHeader())
@@ -172,7 +172,7 @@ describe('AuthController (integration)', () => {
       await request(app.getHttpServer())
         .post('/auth/login')
         .send({ email: 'john@example.com', password: 'Password123' })
-        .expect(404);
+        .expect(401);
     });
   });
 

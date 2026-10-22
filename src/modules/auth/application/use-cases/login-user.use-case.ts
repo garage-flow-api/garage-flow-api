@@ -1,4 +1,4 @@
-import { NotFoundError, UnauthorizedError } from '@common/errors/domain.error';
+import { UnauthorizedError } from '@common/errors/domain.error';
 import { Injectable } from '@nestjs/common';
 
 import { JwtService } from '@nestjs/jwt';
@@ -29,7 +29,7 @@ export class LoginUseCase {
     const user = await this.userRepository.findByEmail(input.email);
 
     if (!user) {
-      throw new NotFoundError('User not found');
+      throw new UnauthorizedError('Invalid email or password');
     }
 
     const isPasswordValid = await this.passwordHasher.compare(input.password, user.passwordHash);
