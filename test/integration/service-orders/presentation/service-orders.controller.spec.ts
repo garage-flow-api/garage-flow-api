@@ -507,7 +507,7 @@ describe('ServiceOrdersController (integration)', () => {
     const created = await request(app.getHttpServer())
       .post('/service-orders')
       .set('Authorization', adminAuthHeader())
-      .send({ clientCpfCnpj, licensePlate, description: 'Ruído no motor' });
+      .send(openServiceOrderBody());
     await putServiceOrderInDiagnosis(created.body.id);
 
     const otherMechanic = await prisma.user.create({
