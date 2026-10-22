@@ -280,7 +280,7 @@ Confirme que as imagens foram criadas:
 
 ```bash
 docker image inspect garage-flow-api:local
-docker image inspect garage-flow-api-migration:latest
+docker image inspect garage-flow-api-migration:local
 ```
 
 Os manifestos utilizam `imagePullPolicy: IfNotPresent`, permitindo que o cluster use as imagens disponíveis localmente no Docker Desktop.
@@ -394,10 +394,9 @@ Acessos:
 
 ### 9. Aplicar o HPA
 
-O HPA mantém entre 1 e 10 réplicas da API. Uma nova réplica pode ser criada quando a utilização média alcançar:
+O HPA mantém entre 1 e 5 réplicas da API. Uma nova réplica pode ser criada quando a utilização média alcançar `60%` de CPU.
 
-- `60%` de CPU;
-- `70%` de memória.
+Quando a demanda diminui, o HPA aguarda uma janela de estabilização de 60 segundos e reduz, no máximo, 50% das réplicas a cada 30 segundos.
 
 Com o Metrics Server disponível:
 
@@ -411,7 +410,9 @@ Se as métricas aparecerem como `<unknown>`, verifique se o Metrics Server está
 
 ### 10. Executar o teste de carga com k6
 
-O arquivo `k6/load-test.js` executa 500 usuários virtuais simultâneos durante 1 minuto, enviando requisições para o endpoint `GET /health`.
+O arquivo `k6/load-test.js` aumenta gradualmente a carga para 50 e depois 500 usuários virtuais, antes de reduzi-la a zero, enviando requisições para o endpoint `GET /health`. Por padrão, o teste utiliza a URL `http://localhost:3000`, disponibilizada pelo port-forward da etapa 8.
+
+O teste falha se a taxa de requisições com erro atingir 1% ou se 95% das requisições não forem concluídas em menos de 500 ms.
 
 No terminal, acompanhe o HPA e os Pods:
 
@@ -423,6 +424,12 @@ Execute o teste:
 
 ```bash
 k6 run k6/load-test.js
+```
+
+Para executar contra outro endereço, informe a variável de ambiente `BASE_URL`:
+
+```bash
+BASE_URL=http://localhost:3000 k6 run k6/load-test.js
 ```
 
 Ao final, o k6 apresenta métricas como quantidade de requisições, latência, throughput e taxa de falhas. Durante a execução, o HPA pode ser acompanhado para verificar o aumento e a redução do número de réplicas da API.

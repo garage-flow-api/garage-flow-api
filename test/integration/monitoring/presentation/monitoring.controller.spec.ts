@@ -4,9 +4,11 @@ import request from 'supertest';
 import { MonitoringController } from '@infra/monitoring/monitoring.controller';
 import { MonitoringService } from '@infra/monitoring/monitoring.service';
 import { PrismaService } from '@infra/database/prisma/prisma.service';
+import { GlobalExceptionFilter } from '@common/filters/global-exception.filter';
 
 describe('MonitoringController (integration)', () => {
   let app: INestApplication;
+  const queryRaw = jest.fn();
 
   beforeAll(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -16,14 +18,20 @@ describe('MonitoringController (integration)', () => {
         {
           provide: PrismaService,
           useValue: {
-            $queryRaw: jest.fn().mockResolvedValue([{ '?column?': 1 }]),
+            $queryRaw: queryRaw,
           },
         },
       ],
     }).compile();
 
     app = module.createNestApplication();
+    app.useGlobalFilters(new GlobalExceptionFilter());
     await app.init();
+  });
+
+  beforeEach(() => {
+    queryRaw.mockReset();
+    queryRaw.mockResolvedValue([{ '?column?': 1 }]);
   });
 
   afterAll(async () => {
@@ -44,6 +52,19 @@ describe('MonitoringController (integration)', () => {
       const response = await request(app.getHttpServer()).get('/ready').expect(200);
 
       expect(response.body).toMatchObject({ status: 'ready' });
+      expect(response.body.timestamp).toEqual(expect.any(String));
+    });
+
+    it('returns the standard 503 response when database is unavailable', async () => {
+      queryRaw.mockRejectedValueOnce(new Error('Database unavailable'));
+
+      const response = await request(app.getHttpServer()).get('/ready').expect(503);
+
+      expect(response.body).toMatchObject({
+        statusCode: 503,
+        message: 'API is not ready',
+        path: '/ready',
+      });
       expect(response.body.timestamp).toEqual(expect.any(String));
     });
   });

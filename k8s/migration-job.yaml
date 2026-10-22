@@ -47,7 +47,7 @@ spec:
 
       containers:
         - name: migrate
-          image: garage-flow-api-migration:latest
+          image: garage-flow-api-migration:local
           imagePullPolicy: IfNotPresent
 
           command:

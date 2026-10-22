@@ -5,6 +5,7 @@ import {
   ApiServiceUnavailableResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { ErrorResponseDto } from '@common/dtos/error-response.dto';
 import { MonitoringResponseDto } from './monitoring-response.dto';
 import { MonitoringService } from './monitoring.service';
 
@@ -35,16 +36,14 @@ export class MonitoringController {
     description: 'The API is ready to receive traffic',
   })
   @ApiServiceUnavailableResponse({
+    type: ErrorResponseDto,
     description: 'The API is not ready because the database is unavailable',
   })
   async checkReadiness(): Promise<MonitoringResponseDto> {
     try {
       return await this.monitoringService.checkReadiness();
     } catch {
-      throw new ServiceUnavailableException({
-        status: 'not_ready',
-        timestamp: new Date().toISOString(),
-      });
+      throw new ServiceUnavailableException('API is not ready');
     }
   }
 }
