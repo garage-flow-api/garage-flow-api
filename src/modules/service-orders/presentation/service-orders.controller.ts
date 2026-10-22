@@ -17,12 +17,14 @@ import { type Request } from 'express';
 import {
   ApiBadRequestResponse,
   ApiCreatedResponse,
+  ApiForbiddenResponse,
   ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiQuery,
   ApiTags,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { CreateServiceOrderUseCase } from '@service-orders/application/use-cases/create-service-order.use-case';
 import { FindServiceOrderByIdUseCase } from '@service-orders/application/use-cases/find-service-order-by-id.use-case';
@@ -106,6 +108,10 @@ export class ServiceOrdersController {
   @ApiCreatedResponse({ type: ServiceOrderCreatedResponseDto })
   @ApiNotFoundResponse({ type: ErrorResponseDto, description: 'Client or vehicle not found' })
   @ApiBadRequestResponse({
+    type: ErrorResponseDto,
+    description: 'Invalid payload, CPF/CNPJ or license plate',
+  })
+  @ApiUnprocessableEntityResponse({
     type: ErrorResponseDto,
     description: 'Vehicle does not belong to the informed client',
   })
@@ -198,7 +204,7 @@ export class ServiceOrdersController {
       'Returns the service order budget. In FINISHED_DIAGNOSIS, it generates the budget and changes the status to AWAITING_APPROVAL. In any later status, it retrieves the budget without changing the status.',
   })
   @ApiNotFoundResponse({ type: ErrorResponseDto, description: 'Service order not found' })
-  @ApiBadRequestResponse({
+  @ApiUnprocessableEntityResponse({
     type: ErrorResponseDto,
     description: 'Service order status does not allow accessing a budget, or it has no items',
   })
@@ -216,7 +222,10 @@ export class ServiceOrdersController {
   })
   @ApiOkResponse({ type: ServiceOrderResponseDto })
   @ApiNotFoundResponse({ type: ErrorResponseDto, description: 'Service order not found' })
-  @ApiBadRequestResponse({ type: ErrorResponseDto, description: 'Invalid status transition' })
+  @ApiUnprocessableEntityResponse({
+    type: ErrorResponseDto,
+    description: 'Invalid status transition',
+  })
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateServiceOrderDto,
@@ -234,7 +243,7 @@ export class ServiceOrdersController {
   })
   @ApiOkResponse({ type: ServiceOrderResponseDto })
   @ApiNotFoundResponse({ type: ErrorResponseDto, description: 'Service order not found' })
-  @ApiBadRequestResponse({
+  @ApiUnprocessableEntityResponse({
     type: ErrorResponseDto,
     description: 'Service order does not have RECEIVED status',
   })
@@ -247,6 +256,11 @@ export class ServiceOrdersController {
   }
 
   @Patch(':id/add-services-and-parts')
+  @ApiForbiddenResponse({
+    type: ErrorResponseDto,
+    description:
+      'Authenticated user does not have the MECHANIC role, or the service order is assigned to another mechanic',
+  })
   @ApiAuth('MECHANIC')
   @ApiOperation({
     summary: 'Adds services and parts to a service order and finishes the diagnosis by ID',
@@ -260,8 +274,11 @@ export class ServiceOrdersController {
   })
   @ApiBadRequestResponse({
     type: ErrorResponseDto,
-    description:
-      'Duplicate part in the same request, unavailable quantity, or the service order is not in IN_DIAGNOSIS status',
+    description: 'Duplicate part in the same request',
+  })
+  @ApiUnprocessableEntityResponse({
+    type: ErrorResponseDto,
+    description: 'Unavailable part quantity, or the service order is not in IN_DIAGNOSIS status',
   })
   async addServicesAndPartsToServiceOrder(
     @Param('id', ParseUUIDPipe) id: string,
@@ -277,7 +294,7 @@ export class ServiceOrdersController {
   @ApiOperation({ summary: 'Approves the budget for a service order' })
   @ApiOkResponse({ type: ServiceOrderResponseDto })
   @ApiNotFoundResponse({ type: ErrorResponseDto, description: 'Service order not found' })
-  @ApiBadRequestResponse({
+  @ApiUnprocessableEntityResponse({
     type: ErrorResponseDto,
     description: 'Service order does not have AWAITING_APPROVAL status',
   })
@@ -294,7 +311,7 @@ export class ServiceOrdersController {
   })
   @ApiOkResponse({ type: ServiceOrderResponseDto })
   @ApiNotFoundResponse({ type: ErrorResponseDto, description: 'Service order not found' })
-  @ApiBadRequestResponse({
+  @ApiUnprocessableEntityResponse({
     type: ErrorResponseDto,
     description: 'Service order already has FINISHED or DELIVERED status',
   })
@@ -304,6 +321,11 @@ export class ServiceOrdersController {
   }
 
   @Patch(':id/start-service')
+  @ApiForbiddenResponse({
+    type: ErrorResponseDto,
+    description:
+      'Authenticated user does not have the MECHANIC role, or the service order is assigned to another mechanic',
+  })
   @ApiAuth('MECHANIC')
   @ApiOperation({
     summary: 'Starts service execution by ID',
@@ -312,9 +334,9 @@ export class ServiceOrdersController {
   })
   @ApiOkResponse({ type: ServiceOrderResponseDto })
   @ApiNotFoundResponse({ type: ErrorResponseDto, description: 'Service order not found' })
-  @ApiBadRequestResponse({
+  @ApiUnprocessableEntityResponse({
     type: ErrorResponseDto,
-    description: 'Wrong mechanic, or service order does not have AWAITING_EXECUTION status',
+    description: 'Service order does not have AWAITING_EXECUTION status',
   })
   async startServiceExecution(
     @Param('id', ParseUUIDPipe) id: string,
@@ -325,6 +347,11 @@ export class ServiceOrdersController {
   }
 
   @Patch(':id/finish-service')
+  @ApiForbiddenResponse({
+    type: ErrorResponseDto,
+    description:
+      'Authenticated user does not have the MECHANIC role, or the service order is assigned to another mechanic',
+  })
   @ApiAuth('MECHANIC')
   @ApiOperation({
     summary: 'Finishes service execution by ID',
@@ -333,9 +360,9 @@ export class ServiceOrdersController {
   })
   @ApiOkResponse({ type: ServiceOrderResponseDto })
   @ApiNotFoundResponse({ type: ErrorResponseDto, description: 'Service order not found' })
-  @ApiBadRequestResponse({
+  @ApiUnprocessableEntityResponse({
     type: ErrorResponseDto,
-    description: 'Wrong mechanic, or service order does not have IN_EXECUTION status',
+    description: 'Service order does not have IN_EXECUTION status',
   })
   async finishServiceExecution(
     @Param('id', ParseUUIDPipe) id: string,
@@ -353,7 +380,7 @@ export class ServiceOrdersController {
   })
   @ApiOkResponse({ type: ServiceOrderResponseDto })
   @ApiNotFoundResponse({ type: ErrorResponseDto, description: 'Service order not found' })
-  @ApiBadRequestResponse({
+  @ApiUnprocessableEntityResponse({
     type: ErrorResponseDto,
     description: 'Service order does not have FINISHED status',
   })
