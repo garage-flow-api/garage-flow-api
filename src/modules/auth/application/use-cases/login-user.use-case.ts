@@ -1,4 +1,6 @@
-import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { UnauthorizedError } from '@common/errors/domain.error';
+import { Injectable } from '@nestjs/common';
+
 import { JwtService } from '@nestjs/jwt';
 
 import { User } from '@auth/domain/entities/user.entity';
@@ -27,13 +29,13 @@ export class LoginUseCase {
     const user = await this.userRepository.findByEmail(input.email);
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new UnauthorizedError('Invalid email or password');
     }
 
     const isPasswordValid = await this.passwordHasher.compare(input.password, user.passwordHash);
 
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedError('Invalid email or password');
     }
 
     const access_token = this.jwtService.sign({

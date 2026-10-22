@@ -1,4 +1,5 @@
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundError } from '@common/errors/domain.error';
+
 import { FindPartsByIdListUseCase } from '@inventory/application/use-cases/find-parts-by-id-list.use-case';
 import { type PartRepository } from '@inventory/domain/repositories/part.repository';
 import { Quantity } from '@inventory/domain/value-objects/quantity.vo';
@@ -42,9 +43,9 @@ describe('FindPartsByIdListUseCase', () => {
     expect(result).toEqual([part1, part2]);
   });
 
-  it('deve lançar NotFoundException quando nenhuma peça for encontrada', async () => {
+  it('deve lançar NotFoundError quando nenhuma peça for encontrada', async () => {
     repository.findByIdList.mockResolvedValue([]);
 
-    await expect(useCase.execute(['id-1', 'id-2'])).rejects.toThrow(NotFoundException);
+    await expect(useCase.execute(['id-1', 'id-2'])).rejects.toThrow(NotFoundError);
   });
 });

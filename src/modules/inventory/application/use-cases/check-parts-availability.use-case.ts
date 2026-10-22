@@ -1,4 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { NotFoundError } from '@common/errors/domain.error';
+import { Injectable } from '@nestjs/common';
+
 import { PartRepository } from '@inventory/domain/repositories/part.repository';
 import { StockLevel } from '@inventory/domain/value-objects/stock-level.vo';
 import { OPEN_SERVICE_ORDER_STATUSES } from '@service-orders/domain/value-objects/service-order-status.vo';
@@ -46,7 +48,7 @@ export class CheckPartsAvailabilityUseCase {
     return partIds.map((partId) => {
       const part = partsById.get(partId);
       if (!part) {
-        throw new NotFoundException(`Part ${partId} not found`);
+        throw new NotFoundError(`Part ${partId} not found`);
       }
 
       const stockLevel = new StockLevel(part, reservedByPart.get(partId) ?? 0);

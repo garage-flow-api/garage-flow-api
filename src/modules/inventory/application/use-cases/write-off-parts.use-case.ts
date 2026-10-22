@@ -1,4 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { NotFoundError } from '@common/errors/domain.error';
+import { Injectable } from '@nestjs/common';
+
 import { Part } from '@inventory/domain/entities/part.entity';
 import { PartRepository } from '@inventory/domain/repositories/part.repository';
 
@@ -23,7 +25,7 @@ export class WriteOffPartsUseCase {
       items.map(async (item) => {
         const part = await this.partRepository.findById(item.inventoryId);
         if (!part) {
-          throw new NotFoundException(`Part ${item.inventoryId} not found`);
+          throw new NotFoundError(`Part ${item.inventoryId} not found`);
         }
         return { part, quantity: item.quantity };
       }),

@@ -1,4 +1,6 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictError, NotFoundError } from '@common/errors/domain.error';
+import { Injectable } from '@nestjs/common';
+
 import { randomUUID } from 'node:crypto';
 import { ClientRepository } from '@client/domain/repositories/client.repository';
 import { VehicleRepository } from '@vehicle/domain/repositories/vehicle.repository';
@@ -25,12 +27,12 @@ export class CreateVehicleUseCase {
 
     const client = await this.clientRepository.findById(input.clientId);
     if (!client) {
-      throw new NotFoundException(`Client with id ${input.clientId} not found`);
+      throw new NotFoundError(`Client with id ${input.clientId} not found`);
     }
 
     const existing = await this.vehicleRepository.findByLicensePlate(licensePlate.value);
     if (existing) {
-      throw new ConflictException(`Vehicle with plate ${licensePlate.format()} already exists`);
+      throw new ConflictError(`Vehicle with plate ${licensePlate.format()} already exists`);
     }
 
     const now = new Date();

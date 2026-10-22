@@ -1,4 +1,5 @@
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundError } from '@common/errors/domain.error';
+
 import { CancelServiceOrderUseCase } from '@service-orders/application/use-cases/cancel-service-order.use-case';
 import { ServiceOrderStatus } from '@service-orders/domain/value-objects/service-order-status.vo';
 import { type ServiceOrderRepository } from '@service-orders/domain/repositories/service-order.repository';
@@ -49,6 +50,6 @@ describe('CancelServiceOrderUseCase', () => {
 
     await expect(
       new CancelServiceOrderUseCase(repository).execute('missing-order'),
-    ).rejects.toThrow(NotFoundException);
+    ).rejects.toThrow(NotFoundError);
   });
 });

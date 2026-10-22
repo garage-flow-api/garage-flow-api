@@ -1,4 +1,6 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { ConflictError } from '@common/errors/domain.error';
+import { Injectable } from '@nestjs/common';
+
 import { randomUUID } from 'node:crypto';
 import { ClientRepository } from '@client/domain/repositories/client.repository';
 import { ClientEntity } from '@client/domain/entities/client.entity';
@@ -21,7 +23,7 @@ export class CreateClientUseCase {
 
     const existing = await this.clientRepository.findByCpfCnpj(cpfCnpj.value);
     if (existing) {
-      throw new ConflictException(`Client with CPF/CNPJ ${cpfCnpj.format()} already exists`);
+      throw new ConflictError(`Client with CPF/CNPJ ${cpfCnpj.format()} already exists`);
     }
 
     const now = new Date();

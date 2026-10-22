@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { NotFoundError } from '@common/errors/domain.error';
+import { Injectable } from '@nestjs/common';
 
 import { User } from '@auth/domain/entities/user.entity';
 import { UserRepository } from '@auth/domain/repositories/user.repository';
@@ -11,7 +12,7 @@ export class GetUserByEmailUseCase {
     const user = await this.userRepository.findByEmail(email);
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundError('User not found');
     }
 
     return user;

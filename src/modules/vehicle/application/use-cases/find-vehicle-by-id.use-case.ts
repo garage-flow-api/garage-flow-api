@@ -1,4 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { NotFoundError } from '@common/errors/domain.error';
+import { Injectable } from '@nestjs/common';
+
 import { VehicleRepository } from '@vehicle/domain/repositories/vehicle.repository';
 import { VehicleEntity } from '@vehicle/domain/entities/vehicle.entity';
 
@@ -9,7 +11,7 @@ export class FindVehicleByIdUseCase {
   async execute(id: string): Promise<VehicleEntity> {
     const vehicle = await this.vehicleRepository.findById(id);
     if (!vehicle) {
-      throw new NotFoundException(`Vehicle with id ${id} not found`);
+      throw new NotFoundError(`Vehicle with id ${id} not found`);
     }
     return vehicle;
   }

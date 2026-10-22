@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { DomainError } from '@common/errors/domain.error';
+import { Injectable } from '@nestjs/common';
 import { ServiceOrderRepository } from '@service-orders/domain/repositories/service-order.repository';
 
 export interface AverageExecutionTimeQuery {
@@ -20,7 +21,7 @@ export class GetAverageExecutionTimeUseCase {
     const { from, to } = query;
 
     if (from && to && from > to) {
-      throw new BadRequestException('FROM must be earlier than or equal to TO');
+      throw new DomainError('FROM must be earlier than or equal to TO');
     }
 
     const metrics = await this.serviceOrderRepository.findAverageExecutionTime(

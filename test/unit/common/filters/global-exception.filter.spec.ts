@@ -1,6 +1,12 @@
 import { BadRequestException, Logger, NotFoundException, type ArgumentsHost } from '@nestjs/common';
 import { type Request, type Response } from 'express';
-import { DomainError } from '@common/errors/domain.error';
+import {
+  BusinessRuleError,
+  ConflictError,
+  DomainError,
+  NotFoundError,
+  UnauthorizedError,
+} from '@common/errors/domain.error';
 import { GlobalExceptionFilter } from '@common/filters/global-exception.filter';
 
 describe('GlobalExceptionFilter', () => {
@@ -69,6 +75,23 @@ describe('GlobalExceptionFilter', () => {
       expect.objectContaining({
         statusCode: 400,
         message: 'Invalid quantity',
+      }),
+    );
+  });
+
+  it.each([
+    [new NotFoundError('Resource not found'), 404],
+    [new ConflictError('Resource already exists'), 409],
+    [new BusinessRuleError('Business rule violated'), 422],
+    [new UnauthorizedError('Invalid email or password'), 401],
+  ])('maps %s to status %i', (error, expectedStatus) => {
+    filter.catch(error, host);
+
+    expect(status).toHaveBeenCalledWith(expectedStatus);
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: expectedStatus,
+        message: error.message,
       }),
     );
   });

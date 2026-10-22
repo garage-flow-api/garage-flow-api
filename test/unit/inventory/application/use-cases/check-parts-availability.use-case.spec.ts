@@ -1,4 +1,5 @@
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundError } from '@common/errors/domain.error';
+
 import { CheckPartsAvailabilityUseCase } from '@inventory/application/use-cases/check-parts-availability.use-case';
 import { type PartRepository } from '@inventory/domain/repositories/part.repository';
 import { Quantity } from '@inventory/domain/value-objects/quantity.vo';
@@ -107,7 +108,7 @@ describe('CheckPartsAvailabilityUseCase', () => {
         { inventoryId: 'p1', quantity: 1 },
         { inventoryId: 'sumiu', quantity: 1 },
       ]),
-    ).rejects.toThrow(NotFoundException);
+    ).rejects.toThrow(NotFoundError);
   });
 
   it('não consulta nada quando não há peças pedidas', async () => {

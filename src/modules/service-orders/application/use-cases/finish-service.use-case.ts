@@ -1,4 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { NotFoundError } from '@common/errors/domain.error';
+import { Injectable } from '@nestjs/common';
+
 import { ServiceOrder } from '@service-orders/domain/entities/service-order.entity';
 import { ServiceOrderRepository } from '@service-orders/domain/repositories/service-order.repository';
 import { WriteOffPartsUseCase } from '@inventory/application/use-cases/write-off-parts.use-case';
@@ -12,7 +14,7 @@ export class FinishServiceUseCase {
 
   async execute(serviceOrderId: string, mechanicId: string): Promise<ServiceOrder> {
     const serviceOrder = await this.serviceOrderRepository.findById(serviceOrderId);
-    if (!serviceOrder) throw new NotFoundException('Service order not found');
+    if (!serviceOrder) throw new NotFoundError('Service order not found');
     serviceOrder.finishService(mechanicId);
     await this.writeOffParts.execute(
       serviceOrder.partItems.map((item) => ({

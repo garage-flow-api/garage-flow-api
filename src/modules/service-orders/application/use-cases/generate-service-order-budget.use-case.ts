@@ -1,4 +1,6 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { BusinessRuleError, NotFoundError } from '@common/errors/domain.error';
+import { Injectable } from '@nestjs/common';
+
 import { ServiceOrderRepository } from '@service-orders/domain/repositories/service-order.repository';
 import { ServiceOrderStatus } from '@service-orders/domain/value-objects/service-order-status.vo';
 import { FindVehicleByIdUseCase } from '@vehicle/application/use-cases/find-vehicle-by-id.use-case';
@@ -51,15 +53,15 @@ export class GenerateServiceOrderBudgetUseCase {
 
   async execute(id: string): Promise<ServiceOrderBudget> {
     const serviceOrder = await this.serviceOrderRepository.findById(id);
-    if (!serviceOrder) throw new NotFoundException('Service order not found');
+    if (!serviceOrder) throw new NotFoundError('Service order not found');
 
     if (!serviceOrder.canAccessBudget()) {
-      throw new BadRequestException(
+      throw new BusinessRuleError(
         'Service orders with RECEIVED or IN_DIAGNOSIS status cannot access a budget',
       );
     }
     if (serviceOrder.serviceItems.length === 0 && serviceOrder.partItems.length === 0) {
-      throw new BadRequestException(
+      throw new BusinessRuleError(
         'Cannot generate a budget for a service order without services or parts',
       );
     }
@@ -83,7 +85,7 @@ export class GenerateServiceOrderBudgetUseCase {
     const serviceLineItems: ServiceOrderBudgetLineItem[] = serviceOrder.serviceItems.map((item) => {
       const service = servicesById.get(item.serviceId);
       if (!service?.name) {
-        throw new NotFoundException(`Service not found: ${item.serviceId}`);
+        throw new NotFoundError(`Service not found: ${item.serviceId}`);
       }
       return {
         name: service.name,
@@ -97,7 +99,7 @@ export class GenerateServiceOrderBudgetUseCase {
     const partLineItems: ServiceOrderBudgetLineItem[] = serviceOrder.partItems.map((item) => {
       const part = partsById.get(item.inventoryId);
       if (!part) {
-        throw new NotFoundException(`Part not found: ${item.inventoryId}`);
+        throw new NotFoundError(`Part not found: ${item.inventoryId}`);
       }
       return {
         name: part.name,

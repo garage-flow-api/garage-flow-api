@@ -1,4 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { NotFoundError } from '@common/errors/domain.error';
+import { Injectable } from '@nestjs/common';
+
 import { Part } from '@inventory/domain/entities/part.entity';
 import { PartRepository } from '@inventory/domain/repositories/part.repository';
 
@@ -8,7 +10,7 @@ export class FindPartByIdUseCase {
 
   async execute(id: string): Promise<Part> {
     const part = await this.partRepository.findById(id);
-    if (!part) throw new NotFoundException('Part not found');
+    if (!part) throw new NotFoundError('Part not found');
     return part;
   }
 }

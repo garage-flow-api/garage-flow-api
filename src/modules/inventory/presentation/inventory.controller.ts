@@ -18,6 +18,7 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiTags,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { CreatePartUseCase } from '@inventory/application/use-cases/create-part.use-case';
 import { RestockPartUseCase } from '@inventory/application/use-cases/restock-part.use-case';
@@ -125,9 +126,13 @@ export class InventoryController {
   @ApiOkResponse({ type: PartResponseDto, description: 'Inventory item consumed successfully' })
   @ApiBadRequestResponse({
     type: ErrorResponseDto,
-    description: 'Invalid quantity or insufficient stock',
+    description: 'Invalid quantity',
   })
   @ApiNotFoundResponse({ type: ErrorResponseDto, description: 'Inventory item not found' })
+  @ApiUnprocessableEntityResponse({
+    type: ErrorResponseDto,
+    description: 'Insufficient stock',
+  })
   async consume(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ConsumePartDto,

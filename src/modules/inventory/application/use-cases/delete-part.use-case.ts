@@ -1,4 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { NotFoundError } from '@common/errors/domain.error';
+import { Injectable } from '@nestjs/common';
+
 import { PartRepository } from '@inventory/domain/repositories/part.repository';
 
 @Injectable()
@@ -7,7 +9,7 @@ export class DeletePartUseCase {
 
   async execute(id: string): Promise<void> {
     const part = await this.partRepository.findById(id);
-    if (!part) throw new NotFoundException('Part not found');
+    if (!part) throw new NotFoundError('Part not found');
 
     part.softDelete();
     await this.partRepository.save(part);

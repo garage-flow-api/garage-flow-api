@@ -1,4 +1,4 @@
-import { DomainError } from '@common/errors/domain.error';
+import { BusinessRuleError, DomainError } from '@common/errors/domain.error';
 
 export class Quantity {
   readonly value: number;
@@ -16,7 +16,7 @@ export class Quantity {
 
   subtract(amount: number): Quantity {
     if (this.value - amount < 0) {
-      throw new DomainError('Insufficient stock');
+      throw new BusinessRuleError('Insufficient stock');
     }
     return new Quantity(this.value - amount);
   }
