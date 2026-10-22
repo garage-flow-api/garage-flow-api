@@ -10,6 +10,7 @@ import { VehicleRepository } from '@vehicle/domain/repositories/vehicle.reposito
 import { PrismaVehicleRepository } from '@vehicle/infrastructure/prisma-vehicle.repository';
 import { PrismaService } from '@infra/database/prisma/prisma.service';
 import { FindVehicleByLicensePlateUseCase } from '@vehicle/application/use-cases/find-vehicle-by-license-plate.use-case';
+import { EnsureVehicleUseCase } from './application/use-cases/ensure-vehicle.use-case';
 
 @Module({
   imports: [ClientModule],
@@ -26,7 +27,13 @@ import { FindVehicleByLicensePlateUseCase } from '@vehicle/application/use-cases
     UpdateVehicleUseCase,
     DeleteVehicleUseCase,
     FindVehicleByLicensePlateUseCase,
+    EnsureVehicleUseCase,
   ],
-  exports: [VehicleRepository, FindVehicleByIdUseCase, FindVehicleByLicensePlateUseCase],
+  exports: [
+    VehicleRepository,
+    FindVehicleByIdUseCase,
+    FindVehicleByLicensePlateUseCase,
+    EnsureVehicleUseCase,
+  ],
 })
 export class VehicleModule {}

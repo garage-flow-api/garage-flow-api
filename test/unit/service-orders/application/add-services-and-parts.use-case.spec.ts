@@ -1,5 +1,6 @@
 import { BusinessRuleError, DomainError, NotFoundError } from '@common/errors/domain.error';
 import { AddServicesAndPartsUseCase } from '@service-orders/application/use-cases/add-services-and-parts.use-case';
+import { BuildServiceOrderItemsUseCase } from '@service-orders/application/use-cases/build-service-order-items.use-case';
 import { ServiceOrder } from '@service-orders/domain/entities/service-order.entity';
 import { ServiceItem } from '@service-orders/domain/entities/service-item.entity';
 import { type ServiceOrderRepository } from '@service-orders/domain/repositories/service-order.repository';
@@ -66,10 +67,17 @@ describe('AddServicesAndPartsUseCase', () => {
     checkPartsAvailability = { execute: jest.fn().mockResolvedValue([buildAvailability(10)]) };
     calculateTotalAmount = { execute: jest.fn().mockResolvedValue(160) };
 
-    useCase = new AddServicesAndPartsUseCase(
-      repository,
+    // A montagem dos itens é testada em build-service-order-items.use-case.spec.ts;
+    // aqui usamos a implementação real com os mesmos mocks, para validar a integração.
+    const buildServiceOrderItems = new BuildServiceOrderItemsUseCase(
       checkPartsAvailability as unknown as CheckPartsAvailabilityUseCase,
       findServicesByIdList as unknown as FindServicesByIdListUseCase,
+    );
+
+    useCase = new AddServicesAndPartsUseCase(
+      repository,
+      buildServiceOrderItems,
+      checkPartsAvailability as unknown as CheckPartsAvailabilityUseCase,
       calculateTotalAmount as unknown as CalculateTotalAmountUseCase,
     );
   });
@@ -119,7 +127,7 @@ describe('AddServicesAndPartsUseCase', () => {
     );
   });
 
-  it('deve rejeitar a mesma peça repetida na entrada', async () => {
+  it('deve rejeitar a mesma peça repetida sem consultar a OS nem o estoque', async () => {
     const dto = {
       services: [],
       parts: [
@@ -151,48 +159,13 @@ describe('AddServicesAndPartsUseCase', () => {
     expect(repository.save).not.toHaveBeenCalled();
   });
 
-  it('deve lançar BusinessRuleError se a quantidade de peça for maior que a disponível', async () => {
+  it('não deve salvar a OS se a quantidade de peça for maior que a disponível', async () => {
     checkPartsAvailability.execute.mockResolvedValue([buildAvailability(1)]); // pediu 2, só tem 1
 
     await expect(useCase.execute('os-1', buildDto(), 'mechanic-1')).rejects.toThrow(
       BusinessRuleError,
     );
-  });
-
-  it('deve barrar quando o estoque físico cobre mas outra OS já reservou a peça', async () => {
-    // 10 na prateleira, 9 comprometidos com OS em aberto -> só 1 realmente livre
-    checkPartsAvailability.execute.mockResolvedValue([buildAvailability(10, 9)]);
-
-    await expect(useCase.execute('os-1', buildDto(), 'mechanic-1')).rejects.toThrow(
-      BusinessRuleError,
-    );
     expect(repository.save).not.toHaveBeenCalled();
-  });
-
-  it('deve aceitar quando o estoque lógico ainda cobre o pedido', async () => {
-    // 10 na prateleira, 5 reservados -> 5 livres, pedido de 2 passa
-    checkPartsAvailability.execute.mockResolvedValue([buildAvailability(10, 5)]);
-
-    await expect(useCase.execute('os-1', buildDto(), 'mechanic-1')).resolves.toBeDefined();
-    expect(repository.save).toHaveBeenCalled();
-  });
-
-  it('deve propagar NotFoundError se o serviço não existir', async () => {
-    findServicesByIdList.execute.mockRejectedValue(new NotFoundError('Serviço não encontrado'));
-
-    await expect(useCase.execute('os-1', buildDto(), 'mechanic-1')).rejects.toThrow(NotFoundError);
-  });
-
-  it('deve propagar NotFoundError se a peça não existir', async () => {
-    checkPartsAvailability.execute.mockRejectedValue(new NotFoundError('Peça não encontrada'));
-
-    await expect(useCase.execute('os-1', buildDto(), 'mechanic-1')).rejects.toThrow(NotFoundError);
-  });
-
-  it('não deve chamar dependências de serviço quando não há serviços informados', async () => {
-    await useCase.execute('os-1', { services: [], parts: [] }, 'mechanic-1');
-
-    expect(findServicesByIdList.execute).not.toHaveBeenCalled();
   });
 
   describe('alerta de estoque mínimo', () => {
