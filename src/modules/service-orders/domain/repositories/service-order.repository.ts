@@ -32,6 +32,7 @@ export abstract class ServiceOrderRepository {
   abstract findAll(
     status?: ServiceOrderStatus,
     mechanicId?: string,
+    excludedStatuses?: ServiceOrderStatus[],
   ): Promise<ServiceOrderListItem[]>;
   abstract findAverageExecutionTime(from?: Date, to?: Date): Promise<AverageExecutionTimeMetrics>;
 }
