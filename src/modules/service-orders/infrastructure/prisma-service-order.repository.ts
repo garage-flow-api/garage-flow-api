@@ -46,11 +46,15 @@ export class PrismaServiceOrderRepository implements ServiceOrderRepository {
     return ServiceOrderMapper.toDomain(raw);
   }
 
-  async findAll(status?: ServiceOrderStatus, mechanicId?: string): Promise<ServiceOrderListItem[]> {
+  async findAll(
+    status?: ServiceOrderStatus,
+    mechanicId?: string,
+    excludedStatuses: ServiceOrderStatus[] = [],
+  ): Promise<ServiceOrderListItem[]> {
     const raws = await this.prisma.serviceOrder.findMany({
       where: {
         deleted_at: null,
-        ...(status ? { status } : {}),
+        ...this.buildStatusFilter(status, excludedStatuses),
         ...(mechanicId ? { mechanicId } : {}),
       },
       include: {
@@ -58,7 +62,7 @@ export class PrismaServiceOrderRepository implements ServiceOrderRepository {
         inventory: { include: { inventory: true } },
         vehicle: { include: { client: true } },
       },
-      orderBy: { created_at: 'desc' },
+      orderBy: { created_at: 'asc' },
     });
 
     return raws.map((raw) => {
@@ -137,5 +141,14 @@ export class PrismaServiceOrderRepository implements ServiceOrderRepository {
         })),
       });
     }
+  }
+
+  private buildStatusFilter(
+    status: ServiceOrderStatus | undefined,
+    excludedStatuses: ServiceOrderStatus[],
+  ): Prisma.ServiceOrderWhereInput {
+    if (status) return { status };
+    if (excludedStatuses.length > 0) return { status: { notIn: excludedStatuses } };
+    return {};
   }
 }
