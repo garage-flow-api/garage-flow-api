@@ -20,6 +20,8 @@ import { GetAverageExecutionTimeUseCase } from '@service-orders/application/use-
 import { BuildServiceOrderItemsUseCase } from '@service-orders/application/use-cases/build-service-order-items.use-case';
 import { ServiceOrderRepository } from '@service-orders/domain/repositories/service-order.repository';
 import { PrismaServiceOrderRepository } from '@service-orders/infrastructure/prisma-service-order.repository';
+import { BudgetWebhookController } from '@service-orders/presentation/budget-webhook.controller';
+import { ProcessBudgetDecisionUseCase } from '@service-orders/application/use-cases/process-budget-decision.use-case';
 import { ClientModule } from '@client/client.module';
 import { VehicleModule } from '@vehicle/vehicle.module';
 import { ServiceModule } from '@service/service.module';
@@ -27,7 +29,7 @@ import { InventoryModule } from '@inventory/inventory.module';
 
 @Module({
   imports: [ClientModule, VehicleModule, ServiceModule, InventoryModule],
-  controllers: [ServiceOrdersController],
+  controllers: [ServiceOrdersController, BudgetWebhookController],
   providers: [
     CreateServiceOrderUseCase,
     FindServiceOrderByIdUseCase,
@@ -43,6 +45,7 @@ import { InventoryModule } from '@inventory/inventory.module';
     GenerateServiceOrderBudgetUseCase,
     ApproveServiceOrderBudgetUseCase,
     CancelServiceOrderUseCase,
+    ProcessBudgetDecisionUseCase,
     FindServiceOrderByTrackingTokenUseCase,
     GetServiceOrderTrackingLinkUseCase,
     GetAverageExecutionTimeUseCase,
