@@ -140,12 +140,6 @@ module "kubernetes_platform" {
   jwt_secret            = random_password.jwt_secret.result
   tracking_token_secret = random_password.tracking_token_secret.result
 
-  bootstrap_admin = {
-    name     = var.bootstrap_admin_name
-    email    = var.bootstrap_admin_email
-    password = random_password.bootstrap_admin.result
-  }
-
   ingress_chart_version = var.ingress_chart_version
   ingress_service_annotations = {
     # Health probe TCP no Azure Load Balancer: evita probes HTTP em "/" que o controller

@@ -103,7 +103,7 @@ variable "bootstrap_admin_email" {
 }
 
 variable "ingress_chart_version" {
-  description = "Versão do chart nginx-ingress. null = última versão estável."
+  description = "Versão do chart nginx-ingress (F5 NGINX). Fixada para recriar o ambiente com a mesma versão."
   type        = string
-  default     = null
+  default     = "2.8.0" # NGINX Ingress Controller 5.7.0
 }

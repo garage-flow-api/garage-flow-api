@@ -1,5 +1,5 @@
 # Recursos Kubernetes que dependem da cloud e, por isso, não ficam versionados em k8s/:
-# Ingress Controller, Secrets com valores gerados e o alias DNS do banco gerenciado.
+# Ingress Controller, Secret da aplicação com valores gerados e o alias DNS do banco gerenciado.
 # Os demais manifestos (Deployment, Service, HPA, Jobs...) são aplicados via Kustomize
 # a partir de infra/kubernetes/overlays.
 
@@ -68,21 +68,8 @@ resource "kubernetes_secret_v1" "app" {
   }
 }
 
-resource "kubernetes_secret_v1" "bootstrap_admin" {
-  metadata {
-    name      = "garage-flow-bootstrap-admin"
-    namespace = var.namespace
-  }
-
-  type = "Opaque"
-
-  # Mesmas chaves de k8s/admin-secret.yaml.
-  data = {
-    ADMIN_NAME     = var.bootstrap_admin.name
-    ADMIN_EMAIL    = var.bootstrap_admin.email
-    ADMIN_PASSWORD = var.bootstrap_admin.password
-  }
-}
+# O Secret `garage-flow-bootstrap-admin` não é gerenciado aqui: o deploy-app.sh o cria só
+# enquanto o Job de bootstrap roda e o remove em seguida. A senha fica no Key Vault/Secrets Manager.
 
 # Substitui o Service do PostgreSQL in-cluster por um alias DNS para o banco gerenciado,
 # mantendo o host `garage-flow-postgres` esperado pelo init container do Job de migration.

@@ -28,16 +28,6 @@ variable "tracking_token_secret" {
   sensitive   = true
 }
 
-variable "bootstrap_admin" {
-  description = "Credenciais do primeiro administrador, consumidas pelo Job de bootstrap."
-  type = object({
-    name     = string
-    email    = string
-    password = string
-  })
-  sensitive = true
-}
-
 variable "ingress_namespace" {
   description = "Namespace do Ingress Controller."
   type        = string
@@ -45,9 +35,8 @@ variable "ingress_namespace" {
 }
 
 variable "ingress_chart_version" {
-  description = "Versão do chart nginx-ingress (F5 NGINX). null = última versão estável publicada."
+  description = "Versão do chart nginx-ingress (F5 NGINX), fixada pelas stacks de cada cloud."
   type        = string
-  default     = null
 }
 
 variable "ingress_service_annotations" {

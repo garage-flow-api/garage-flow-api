@@ -78,7 +78,14 @@ YAML
   echo "${target}"
 }
 
-trap 'rm -rf "${RENDER_DIR}"' EXIT
+BOOTSTRAP_ADMIN_SECRET="garage-flow-bootstrap-admin"
+
+# Remove os arquivos renderizados e, se o deploy for interrompido, o Secret temporário do admin.
+cleanup() {
+  rm -rf "${RENDER_DIR}"
+  kubectl delete secret "${BOOTSTRAP_ADMIN_SECRET}" --ignore-not-found >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
 
 # Jobs são imutáveis: cada execução remove o anterior, aplica o novo e aguarda a conclusão.
 run_job() {
@@ -93,13 +100,33 @@ run_job() {
   kubectl logs "job/${job}" --tail=20 || true
 }
 
+# O Secret do primeiro admin só existe enquanto o Job de bootstrap roda: não fica no cluster
+# nem é recriado pelo Terraform. A senha permanece no Key Vault/Secrets Manager.
+# O manifesto vai pelo stdin para a senha não aparecer na linha de comando.
+create_bootstrap_admin_secret() {
+  kubectl apply -f - >/dev/null <<YAML
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${BOOTSTRAP_ADMIN_SECRET}
+type: Opaque
+stringData:
+  ADMIN_NAME: "$(tf_output bootstrap_admin_name)"
+  ADMIN_EMAIL: "$(tf_output bootstrap_admin_email)"
+  ADMIN_PASSWORD: "$(tf_output bootstrap_admin_password)"
+YAML
+}
+
 configure_kubectl
 
 # ---------------------------------------------------------------------------
 # 3. Banco: migrations e primeiro administrador (idempotente)
 # ---------------------------------------------------------------------------
 run_job cloud-migration garage-flow-migration
+
+create_bootstrap_admin_secret
 run_job cloud-bootstrap-admin garage-flow-bootstrap-admin
+kubectl delete secret "${BOOTSTRAP_ADMIN_SECRET}" --ignore-not-found >/dev/null
 
 # ---------------------------------------------------------------------------
 # 4. API: ConfigMap, Deployment, Service, Ingress e HPA

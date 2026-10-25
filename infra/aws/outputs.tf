@@ -58,6 +58,21 @@ output "secrets_read_command" {
   value       = "aws secretsmanager get-secret-value --region ${var.aws_region} --secret-id ${module.secrets.name} --query SecretString --output text"
 }
 
+# Credenciais do primeiro admin, lidas pelo deploy-app.sh para criar o Secret temporário do
+# Job de bootstrap. A senha também fica no cofre da cloud (ver secrets_read_command).
+output "bootstrap_admin_name" {
+  value = var.bootstrap_admin_name
+}
+
+output "bootstrap_admin_email" {
+  value = var.bootstrap_admin_email
+}
+
+output "bootstrap_admin_password" {
+  value     = random_password.bootstrap_admin.result
+  sensitive = true
+}
+
 output "iam_roles_managed_by_terraform" {
   description = "false quando a stack reutiliza a LabRole do Learner Lab."
   value       = module.iam.managed_by_terraform

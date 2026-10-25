@@ -27,7 +27,7 @@ As justificativas de cada escolha, com prós, contras e alternativas descartadas
 | Camada | Responsável | Conteúdo |
 | --- | --- | --- |
 | Infraestrutura de cloud | Terraform (`infra/aws`, `infra/azure`) | Rede, cluster Kubernetes, PostgreSQL gerenciado, registry de imagens, cofre de segredos |
-| Plataforma no cluster | Terraform (`infra/modules/kubernetes-platform`) | Ingress Controller, Secrets da aplicação, alias DNS do banco |
+| Plataforma no cluster | Terraform (`infra/modules/kubernetes-platform`) | Ingress Controller, Secret da aplicação, alias DNS do banco |
 | Aplicação | Kustomize (`k8s/` + `infra/kubernetes/overlays`) | ConfigMap, Deployment, Service, Ingress, HPA, Jobs de migration e bootstrap |
 
 O Terraform cuida de tudo o que depende da cloud. Os manifestos de `k8s/` não são alterados: os overlays em `infra/kubernetes/overlays` reaproveitam esses arquivos e removem apenas o que, em cloud, é substituído por serviços gerenciados (PostgreSQL in-cluster e Secrets versionados).
@@ -193,9 +193,9 @@ infra/
 
 | Recurso | Origem | Finalidade |
 | --- | --- | --- |
-| Helm release `nginx-ingress` (namespace `ingress-nginx`) | Terraform | Ingress Controller com Service `LoadBalancer`, classe `nginx` |
+| Helm release `nginx-ingress` (namespace `ingress-nginx`) | Terraform | Ingress Controller com Service `LoadBalancer`, classe `nginx`; chart fixado em `ingress_chart_version` |
 | Secret `garage-flow-secrets` | Terraform | `DATABASE_URL`, `POSTGRES_*`, `JWT_SECRET`, `TRACKING_TOKEN_SECRET` |
-| Secret `garage-flow-bootstrap-admin` | Terraform | Credenciais do primeiro administrador |
+| Secret `garage-flow-bootstrap-admin` | `deploy-app.sh`, só durante o Job de bootstrap | Credenciais do primeiro administrador (a senha fica no cofre) |
 | Service `garage-flow-postgres` (ExternalName) | Terraform | Alias DNS para o banco gerenciado, preservando o host usado pelo Job de migration |
 | ConfigMap, Deployment, Service, Ingress, HPA | `k8s/` via `overlays/cloud` | Aplicação |
 | Jobs `garage-flow-migration`, `garage-flow-bootstrap-admin` | `k8s/` via overlays dedicados | Migrations e primeiro administrador |
@@ -396,7 +396,7 @@ infra/scripts/deploy-app.sh aws    # ou azure
 | Push | `docker push <repositório>:<sha>` |
 | kubeconfig | `terraform output -raw kubeconfig_command` |
 | Migrations | `kubectl apply -k` do overlay `cloud-migration`, aguardando o Job concluir |
-| Primeiro admin | `kubectl apply -k` do overlay `cloud-bootstrap-admin`, aguardando o Job concluir |
+| Primeiro admin | Cria o Secret `garage-flow-bootstrap-admin` com os outputs `bootstrap_admin_*`, `kubectl apply -k` do overlay `cloud-bootstrap-admin`, aguarda o Job concluir e remove o Secret |
 | API | `kubectl apply -k` do overlay `cloud`, seguido de `kubectl rollout status` |
 
 A tag das imagens é o SHA curto do commit, com sufixo `-dirty` se houver alterações locais não commitadas. Para usar outra tag: `infra/scripts/deploy-app.sh aws <tag>`.
@@ -458,6 +458,8 @@ As duas stacks expõem os mesmos outputs. O pipeline os lê com `terraform -chdi
 | `ingress_namespace` | Namespace do Ingress Controller |
 | `secrets_store_ref` | Secret do Secrets Manager / nome do Key Vault |
 | `secrets_read_command` | Comando que exibe os segredos gerados |
+| `bootstrap_admin_name`, `bootstrap_admin_email` | Nome e e-mail do primeiro administrador |
+| `bootstrap_admin_password` | Senha do primeiro administrador (sensível), usada só para criar o Secret temporário do Job de bootstrap |
 
 Sequência de deploy esperada: a mesma de [`scripts/deploy-app.sh`](scripts/deploy-app.sh). Cada bloco numerado do script corresponde a um step do pipeline.
 

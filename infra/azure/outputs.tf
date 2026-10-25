@@ -58,6 +58,21 @@ output "secrets_read_command" {
   value       = "az keyvault secret show --vault-name ${module.secrets.name} --name admin-password --query value --output tsv"
 }
 
+# Credenciais do primeiro admin, lidas pelo deploy-app.sh para criar o Secret temporário do
+# Job de bootstrap. A senha também fica no cofre da cloud (ver secrets_read_command).
+output "bootstrap_admin_name" {
+  value = var.bootstrap_admin_name
+}
+
+output "bootstrap_admin_email" {
+  value = var.bootstrap_admin_email
+}
+
+output "bootstrap_admin_password" {
+  value     = random_password.bootstrap_admin.result
+  sensitive = true
+}
+
 # Específicos da Azure
 output "resource_group_name" {
   value = azurerm_resource_group.this.name

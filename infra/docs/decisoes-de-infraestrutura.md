@@ -212,6 +212,8 @@ Na Azure, a saída dos nodes é feita pelo Load Balancer padrão do AKS, sem cus
 - **AWS:** Network Load Balancer provisionado pelo cloud provider nativo do Kubernetes (anotação `aws-load-balancer-type: nlb`);
 - **Azure:** Azure Standard Load Balancer, com health probe TCP.
 
+A versão do chart é fixada (`ingress_chart_version`, hoje `2.8.0`, controller 5.7.0) para que um ambiente recriado receba a mesma versão; a atualização é uma mudança explícita no código.
+
 O metrics-server é instalado como add-on do EKS; no AKS ele já vem nativo. Não há domínio nem TLS: o acesso é feito pelo hostname/IP do Load Balancer.
 
 **Motivo principal.** É um controller mantido, compatível com o manifesto existente sem alterações, e que funciona sem IAM Role dedicada.
@@ -245,20 +247,22 @@ O metrics-server é instalado como add-on do EKS; no AKS ele já vem nativo. Nã
 **Decisão.**
 1. O Terraform gera os valores com `random_password`: senha do banco, `JWT_SECRET`, `TRACKING_TOKEN_SECRET` e senha do primeiro administrador. São apenas alfanuméricos, para dispensar URL-encoding na `DATABASE_URL`.
 2. Os valores são replicados no **AWS Secrets Manager** (`garage-flow/staging/app`) ou no **Azure Key Vault**, que servem como fonte de consulta para pessoas e integrações. Na Azure, o acesso ao Key Vault é controlado por Azure RBAC (ver ADR-15).
-3. O Terraform cria os Secrets Kubernetes `garage-flow-secrets` e `garage-flow-bootstrap-admin` com as mesmas chaves dos manifestos.
-4. Os overlays de cloud removem os Secrets versionados.
+3. O Terraform cria o Secret Kubernetes `garage-flow-secrets` com as mesmas chaves do manifesto.
+4. O Secret `garage-flow-bootstrap-admin` é temporário: o `deploy-app.sh` o cria a partir dos outputs do Terraform logo antes do Job de bootstrap e o remove assim que o Job termina.
+5. Os overlays de cloud removem os Secrets versionados.
 
 **Motivo principal.** Nenhum segredo passa pelo Git nem pelo pipeline de CI, e a aplicação não precisa mudar.
 
 **Prós**
 - Segredos fortes e únicos por ambiente.
-- O pipeline de CI/CD não manipula valores sensíveis.
+- O pipeline de CI/CD só manipula a senha do admin, e apenas durante o Job de bootstrap.
+- A credencial do admin não fica no cluster depois do bootstrap.
 - A senha do admin pode ser recuperada pelo cofre (`secrets_read_command`).
 
 **Contras**
 - Os valores ficam no **state do Terraform**. Mitigação: o state fica em bucket/storage privado, criptografado e versionado.
 - A rotação exige `terraform apply` e o restart dos pods; não há sincronização automática cofre → cluster.
-- O Secret do bootstrap permanece no cluster, porque é gerenciado pelo Terraform. O README da branch `kubernetes-config` recomenda removê-lo após o uso; em cloud, a remoção seria revertida no próximo `apply`.
+- O deploy precisa ler o output sensível `bootstrap_admin_password`, o que exige acesso ao state do Terraform.
 
 **Alternativas descartadas**
 

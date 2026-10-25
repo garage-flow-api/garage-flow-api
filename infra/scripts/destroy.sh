@@ -9,7 +9,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 parse_cloud "${1:-}"
 AUTO_APPROVE="${2:-}"
 
-require_cmd terraform kubectl
+require_cmd terraform
 require_cloud_cli
 tf_init
 
@@ -22,10 +22,14 @@ fi
 # ---------------------------------------------------------------------------
 # 1. Aplicação: remove os pods da API antes de remover o banco e o cluster.
 # ---------------------------------------------------------------------------
-if configure_kubectl 2>/dev/null; then
+# O kubectl só é usado nesta limpeza: sem ele, o terraform destroy remove o cluster mesmo assim.
+if ! command -v kubectl >/dev/null 2>&1; then
+  warn "kubectl não encontrado; pulando a remoção da aplicação e seguindo para o terraform destroy."
+elif configure_kubectl 2>/dev/null; then
   log "Removendo a aplicação do cluster"
   kubectl delete -k "${INFRA_DIR}/kubernetes/overlays/cloud" --ignore-not-found --wait=true || true
   kubectl delete job garage-flow-migration garage-flow-bootstrap-admin --ignore-not-found || true
+  kubectl delete secret garage-flow-bootstrap-admin --ignore-not-found || true
 else
   warn "Cluster inacessível ou já removido; seguindo para o terraform destroy."
 fi
