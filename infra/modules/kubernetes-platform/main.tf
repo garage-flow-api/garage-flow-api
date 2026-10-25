@@ -6,7 +6,7 @@
 locals {
   # `uselibpqcompat=true` faz o driver `pg` (usado pelo PrismaPg) seguir a semântica do libpq:
   # `sslmode=require` criptografa a conexão sem validar a cadeia de certificados. Sem isso, o `pg`
-  # trata `require` como `verify-full` e rejeita a CA do RDS, que não está no trust store do Node.
+  # trata `require` como `verify-full` e rejeita a CA do servidor, que não está no trust store do Node.
   database_url = format(
     "postgresql://%s:%s@%s:%d/%s?schema=public&sslmode=require&uselibpqcompat=true",
     var.database.username,

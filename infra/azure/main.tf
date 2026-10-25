@@ -124,7 +124,7 @@ module "secrets" {
 }
 
 # ---------------------------------------------------------------------------
-# Recursos dentro do cluster (compartilhado com infra/aws)
+# Recursos dentro do cluster (infra/modules/kubernetes-platform)
 # ---------------------------------------------------------------------------
 module "kubernetes_platform" {
   source = "../modules/kubernetes-platform"

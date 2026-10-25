@@ -1,9 +1,4 @@
-# Contrato de outputs — mesmos nomes em infra/aws.
-# Consumido por infra/scripts/*.sh e pelo pipeline de CI/CD.
-
-output "cloud" {
-  value = "azure"
-}
+# Contrato de outputs, consumido por infra/scripts/*.sh e pelo pipeline de CI/CD.
 
 output "environment" {
   value = var.environment
@@ -59,7 +54,7 @@ output "secrets_read_command" {
 }
 
 # Credenciais do primeiro admin, lidas pelo deploy-app.sh para criar o Secret temporário do
-# Job de bootstrap. A senha também fica no cofre da cloud (ver secrets_read_command).
+# Job de bootstrap. A senha também fica no Key Vault (ver secrets_read_command).
 output "bootstrap_admin_name" {
   value = var.bootstrap_admin_name
 }

@@ -1,5 +1,4 @@
-# Cópia dos segredos gerados pelo Terraform no Azure Key Vault (equivalente ao AWS Secrets
-# Manager). O cluster consome os mesmos valores via Secret Kubernetes criado pelo módulo
+# Cópia dos segredos gerados pelo Terraform no Azure Key Vault. O cluster consome os mesmos valores via Secret Kubernetes criado pelo módulo
 # kubernetes-platform.
 
 data "azurerm_client_config" "current" {}

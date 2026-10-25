@@ -6,6 +6,7 @@ set -euo pipefail
 SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INFRA_DIR="$(cd "${SCRIPTS_DIR}/.." && pwd)"
 REPO_ROOT="$(cd "${INFRA_DIR}/.." && pwd)"
+STACK_DIR="${INFRA_DIR}/azure"
 ENVIRONMENT="${ENVIRONMENT:-staging}"
 
 # Mesmo modo de login do setup-azure.sh: navegador em vez do WAM do Windows.
@@ -30,22 +31,10 @@ require_cmd() {
   done
 }
 
-# Valida o argumento <aws|azure> e exporta CLOUD e STACK_DIR.
-parse_cloud() {
-  CLOUD="${1:-}"
-  case "${CLOUD}" in
-    aws | azure) ;;
-    *) fail "Informe a cloud: aws ou azure." ;;
-  esac
-  STACK_DIR="${INFRA_DIR}/${CLOUD}"
-  export CLOUD STACK_DIR
-  load_cloud_env
-}
-
-# Carrega infra/<cloud>/.env.<cloud> (ignorado pelo Git), gerado por setup-azure.sh.
+# Carrega infra/azure/.env.azure (ignorado pelo Git), gerado por setup-azure.sh.
 # Ex.: ARM_SUBSCRIPTION_ID da assinatura Azure escolhida no wizard.
-load_cloud_env() {
-  local env_file="${STACK_DIR}/.env.${CLOUD}"
+load_azure_env() {
+  local env_file="${STACK_DIR}/.env.azure"
   if [[ -f "${env_file}" ]]; then
     set -a
     # shellcheck source=/dev/null
@@ -59,35 +48,31 @@ tfvars_value() {
   sed -n "s/^${1}[[:space:]]*=[[:space:]]*\"\(.*\)\".*/\1/p" "${STACK_DIR}/$(tf_var_file)" | head -n 1
 }
 
-require_cloud_cli() {
-  if [[ "${CLOUD}" == "aws" ]]; then
-    require_cmd aws
-    aws sts get-caller-identity >/dev/null 2>&1 ||
-      fail "Credenciais AWS inválidas ou expiradas. No Learner Lab, copie novamente 'AWS Details' para ~/.aws/credentials."
-  else
-    require_cmd az
-    az account show >/dev/null 2>&1 ||
-      fail "Sessão Azure inexistente. Execute 'az login' ou infra/scripts/setup-azure.sh."
+# Valida o az CLI e a sessão, e define a assinatura usada pelo Terraform e pelo az CLI.
+require_azure_cli() {
+  load_azure_env
+  require_cmd az
+  az account show >/dev/null 2>&1 ||
+    fail "Sessão Azure inexistente. Execute 'az login' ou infra/scripts/setup-azure.sh."
 
-    # O provider azurerm 4.x exige a assinatura explícita (ARM_SUBSCRIPTION_ID).
-    # Prioridade: subscription_id do tfvars (assinatura fixada do grupo) > .env.azure > az CLI.
-    # Com valor, alinha o az CLI a ela, para que az acr/aks/keyvault usem a mesma assinatura.
-    local pinned_subscription
-    pinned_subscription="$(tfvars_value subscription_id)"
-    if [[ -n "${pinned_subscription}" ]]; then
-      if [[ -n "${ARM_SUBSCRIPTION_ID:-}" && "${ARM_SUBSCRIPTION_ID}" != "${pinned_subscription}" ]]; then
-        warn "Usando a assinatura fixada em $(tf_var_file) (${pinned_subscription}), não ${ARM_SUBSCRIPTION_ID}."
-      fi
-      ARM_SUBSCRIPTION_ID="${pinned_subscription}"
+  # O provider azurerm 4.x exige a assinatura explícita (ARM_SUBSCRIPTION_ID).
+  # Prioridade: subscription_id do tfvars (assinatura fixada do grupo) > .env.azure > az CLI.
+  # Com valor, alinha o az CLI a ela, para que az acr/aks/keyvault usem a mesma assinatura.
+  local pinned_subscription
+  pinned_subscription="$(tfvars_value subscription_id)"
+  if [[ -n "${pinned_subscription}" ]]; then
+    if [[ -n "${ARM_SUBSCRIPTION_ID:-}" && "${ARM_SUBSCRIPTION_ID}" != "${pinned_subscription}" ]]; then
+      warn "Usando a assinatura fixada em $(tf_var_file) (${pinned_subscription}), não ${ARM_SUBSCRIPTION_ID}."
     fi
-    if [[ -n "${ARM_SUBSCRIPTION_ID:-}" ]]; then
-      az account set --subscription "${ARM_SUBSCRIPTION_ID}" >/dev/null 2>&1 ||
-        fail "Assinatura ${ARM_SUBSCRIPTION_ID} inacessível para o usuário logado no az CLI."
-    else
-      ARM_SUBSCRIPTION_ID="$(az account show --query id --output tsv)"
-    fi
-    export ARM_SUBSCRIPTION_ID
+    ARM_SUBSCRIPTION_ID="${pinned_subscription}"
   fi
+  if [[ -n "${ARM_SUBSCRIPTION_ID:-}" ]]; then
+    az account set --subscription "${ARM_SUBSCRIPTION_ID}" >/dev/null 2>&1 ||
+      fail "Assinatura ${ARM_SUBSCRIPTION_ID} inacessível para o usuário logado no az CLI."
+  else
+    ARM_SUBSCRIPTION_ID="$(az account show --query id --output tsv)"
+  fi
+  export ARM_SUBSCRIPTION_ID
 }
 
 tf() {
@@ -105,7 +90,7 @@ tf_var_file() {
 # Inicializa a stack principal com o backend remoto gerado pelo bootstrap.
 tf_init() {
   [[ -f "${STACK_DIR}/backend.hcl" ]] ||
-    fail "Arquivo ${STACK_DIR}/backend.hcl ausente. Execute infra/scripts/provision.sh ${CLOUD} (cria o state remoto)."
+    fail "Arquivo ${STACK_DIR}/backend.hcl ausente. Execute infra/scripts/provision.sh (cria o state remoto)."
   tf init -input=false -reconfigure -backend-config=backend.hcl >/dev/null
 }
 

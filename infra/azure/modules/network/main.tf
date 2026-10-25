@@ -1,8 +1,8 @@
 # VNet com duas subnets:
 #   - aks: nodes do cluster (pods usam Azure CNI Overlay, fora do espaço da VNet);
 #   - postgres: subnet delegada ao Azure Database for PostgreSQL Flexible Server (acesso privado).
-# Diferente da AWS, a saída para a internet dos nodes é provida pelo Load Balancer do AKS,
-# sem custo adicional de NAT Gateway.
+# A saída para a internet dos nodes é provida pelo Load Balancer do AKS, sem custo
+# adicional de NAT Gateway.
 
 resource "azurerm_virtual_network" "this" {
   name                = "vnet-${var.name}"

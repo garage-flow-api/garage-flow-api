@@ -1,19 +1,18 @@
 #!/usr/bin/env bash
-# Publica as imagens no registry da cloud e aplica os manifestos de k8s/ no cluster.
+# Publica as imagens no ACR e aplica os manifestos de k8s/ no AKS.
 # Referência para o pipeline de CI/CD: cada etapa abaixo corresponde a um step do deploy.
 #
-# Uso: infra/scripts/deploy-app.sh <aws|azure> [tag]
+# Uso: infra/scripts/deploy-app.sh [tag]
 #   tag: padrão = SHA curto do commit atual (sufixo -dirty se houver alterações locais)
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-parse_cloud "${1:-}"
 require_cmd terraform kubectl docker git
-require_cloud_cli
+require_azure_cli
 tf_init
 
-IMAGE_TAG="${2:-$(git -C "${REPO_ROOT}" rev-parse --short HEAD)}"
-if [[ -z "${2:-}" ]] && [[ -n "$(git -C "${REPO_ROOT}" status --porcelain)" ]]; then
+IMAGE_TAG="${1:-$(git -C "${REPO_ROOT}" rev-parse --short HEAD)}"
+if [[ -z "${1:-}" ]] && [[ -n "$(git -C "${REPO_ROOT}" status --porcelain)" ]]; then
   IMAGE_TAG="${IMAGE_TAG}-dirty"
 fi
 
@@ -135,13 +134,9 @@ ADDRESS="$(kubectl get service -n "${INGRESS_NAMESPACE}" \
   -o jsonpath='{range .items[?(@.spec.type=="LoadBalancer")]}{.status.loadBalancer.ingress[0].hostname}{.status.loadBalancer.ingress[0].ip}{end}')"
 [[ -n "${ADDRESS}" ]] || fail "Load Balancer do Ingress Controller ainda sem endereço público."
 
-# Host do Ingress: na AWS o NLB já tem hostname; na Azure o LB só tem IP, então usa o
-# DNS curinga nip.io (<ip>.nip.io resolve para <ip>), sem precisar de domínio próprio.
-if [[ "${ADDRESS}" =~ ^[0-9.]+$ ]]; then
-  INGRESS_HOST="${ADDRESS}.nip.io"
-else
-  INGRESS_HOST="${ADDRESS}"
-fi
+# Host do Ingress: o Load Balancer da Azure só tem IP, então usa o DNS curinga nip.io
+# (<ip>.nip.io resolve para <ip>), sem precisar de domínio próprio.
+INGRESS_HOST="${ADDRESS}.nip.io"
 
 log "Aplicando manifestos da API (host ${INGRESS_HOST})"
 kubectl apply -k "$(render_overlay cloud)"
@@ -152,5 +147,4 @@ echo "  API:     http://${INGRESS_HOST}"
 echo "  Swagger: http://${INGRESS_HOST}/docs"
 echo "  Health:  http://${INGRESS_HOST}/health"
 echo "  Senha do admin: $(tf_output secrets_read_command)"
-[[ "${CLOUD}" == "aws" ]] && warn "O DNS do Load Balancer da AWS pode levar alguns minutos para propagar."
 exit 0

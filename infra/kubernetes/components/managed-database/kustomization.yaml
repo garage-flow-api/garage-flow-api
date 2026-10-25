@@ -1,6 +1,6 @@
 # Remove o PostgreSQL in-cluster e os Secrets versionados.
 #
-# Em cloud o banco é gerenciado (RDS / Azure Database for PostgreSQL) e o Terraform
+# Em cloud o banco é gerenciado (Azure Database for PostgreSQL) e o Terraform
 # (infra/modules/kubernetes-platform) cria no cluster:
 #   - Secret `garage-flow-secrets` com valores gerados (o `garage-flow-bootstrap-admin` é
 #     criado pelo infra/scripts/deploy-app.sh só durante o Job de bootstrap);

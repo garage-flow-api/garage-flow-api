@@ -458,9 +458,9 @@ say "Cria state remoto, rede, AKS, PostgreSQL, ACR, Key Vault e Ingress Controll
 note "Leva ~15-20 minutos e consome créditos (~US\$ 3/dia enquanto existir)."
 note "O próprio script mostra o plano e pede confirmação ('sim') antes de aplicar."
 if confirm "Provisionar agora?"; then
-  infra/scripts/provision.sh azure
+  infra/scripts/provision.sh
 else
-  SKIPPED+=("Provisionar: infra/scripts/provision.sh azure")
+  SKIPPED+=("Provisionar: infra/scripts/provision.sh")
 fi
 pause
 
@@ -468,19 +468,19 @@ pause
 stage "Deploy da aplicação"
 if ! terraform -chdir=infra/azure output -raw cluster_name >/dev/null 2>&1; then
   note "Infraestrutura ainda não provisionada; pulando."
-  SKIPPED+=("Deploy: infra/scripts/deploy-app.sh azure (após provisionar)")
+  SKIPPED+=("Deploy: infra/scripts/deploy-app.sh (após provisionar)")
 elif ! docker info >/dev/null 2>&1; then
   warn "Docker parado: abra o Docker Desktop e rode o deploy depois."
-  SKIPPED+=("Deploy: infra/scripts/deploy-app.sh azure")
+  SKIPPED+=("Deploy: infra/scripts/deploy-app.sh")
 else
   say "Build e push das imagens no ACR, migrations, primeiro admin e API."
   if confirm "Fazer o deploy agora?"; then
-    infra/scripts/deploy-app.sh azure
+    infra/scripts/deploy-app.sh
   else
-    SKIPPED+=("Deploy: infra/scripts/deploy-app.sh azure")
+    SKIPPED+=("Deploy: infra/scripts/deploy-app.sh")
   fi
 fi
-SKIPPED+=("Ao terminar a sessão: infra/scripts/destroy.sh azure (encerra a cobrança)")
+SKIPPED+=("Ao terminar a sessão: infra/scripts/destroy.sh (encerra a cobrança)")
 pause
 
 finish

@@ -10,11 +10,8 @@ override.tf.json
 *_override.tf
 *_override.tf.json
 
-# Gerado pelas stacks de bootstrap (nome do bucket/storage account do state)
-backend.hcl
-# Azure: state compartilhado pelo grupo na mesma assinatura (só nomes, sem credenciais).
-# Na AWS cada membro usa o próprio Learner Lab, então o arquivo continua local.
-!azure/backend.hcl
+# backend.hcl (gerado pela stack de bootstrap) é versionado: o grupo compartilha o mesmo
+# state remoto na mesma assinatura (só nomes, sem credenciais).
 
 # Overlays temporários gerados por infra/scripts/deploy-app.sh
 kubernetes/.deploy/

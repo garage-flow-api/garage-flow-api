@@ -35,12 +35,12 @@ variable "ingress_namespace" {
 }
 
 variable "ingress_chart_version" {
-  description = "Versão do chart nginx-ingress (F5 NGINX), fixada pelas stacks de cada cloud."
+  description = "Versão do chart nginx-ingress (F5 NGINX), fixada pela stack infra/azure."
   type        = string
 }
 
 variable "ingress_service_annotations" {
-  description = "Anotações específicas da cloud para o Service LoadBalancer do Ingress Controller."
+  description = "Anotações específicas da Azure para o Service LoadBalancer do Ingress Controller."
   type        = map(string)
   default     = {}
 }

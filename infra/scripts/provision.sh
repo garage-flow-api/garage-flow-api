@@ -1,31 +1,25 @@
 #!/usr/bin/env bash
-# Provisiona toda a infraestrutura de uma cloud: state remoto (bootstrap) + stack principal.
+# Provisiona toda a infraestrutura na Azure: state remoto (bootstrap) + stack principal.
 #
-# Uso: infra/scripts/provision.sh <aws|azure> [--auto-approve]
-#   ENVIRONMENT=staging (padrão) seleciona infra/<cloud>/environments/<ENVIRONMENT>.tfvars
+# Uso: infra/scripts/provision.sh [--auto-approve]
+#   ENVIRONMENT=staging (padrão) seleciona infra/azure/environments/<ENVIRONMENT>.tfvars
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-parse_cloud "${1:-}"
-AUTO_APPROVE="${2:-}"
+AUTO_APPROVE="${1:-}"
 
 require_cmd terraform
-require_cloud_cli
+require_azure_cli
 
 if [[ ! -f "${STACK_DIR}/backend.hcl" ]]; then
-  log "Criando o state remoto (bootstrap) para ${CLOUD}"
-  bootstrap_vars=(-var="environment=${ENVIRONMENT}")
-  if [[ "${CLOUD}" == "azure" ]]; then
-    # Mesma região do ambiente: assinaturas de estudante restringem regiões por policy.
-    bootstrap_vars+=(-var="location=$(tfvars_value location)")
-  else
-    bootstrap_vars+=(-var="aws_region=$(tfvars_value aws_region)")
-  fi
+  log "Criando o state remoto (bootstrap)"
+  # Mesma região do ambiente: assinaturas de estudante restringem regiões por policy.
   terraform -chdir="${STACK_DIR}/bootstrap" init -input=false
-  terraform -chdir="${STACK_DIR}/bootstrap" apply -input=false -auto-approve "${bootstrap_vars[@]}"
+  terraform -chdir="${STACK_DIR}/bootstrap" apply -input=false -auto-approve \
+    -var="environment=${ENVIRONMENT}" -var="location=$(tfvars_value location)"
 fi
 
-log "Inicializando a stack ${CLOUD}/${ENVIRONMENT}"
+log "Inicializando a stack azure/${ENVIRONMENT}"
 tf_init
 
 log "Planejando alterações"
@@ -36,9 +30,9 @@ if [[ "${AUTO_APPROVE}" != "--auto-approve" ]]; then
   [[ "${answer}" == "sim" ]] || fail "Operação cancelada."
 fi
 
-log "Aplicando (EKS/AKS e banco gerenciado levam ~15-20 minutos)"
+log "Aplicando (AKS e banco gerenciado levam ~15-20 minutos)"
 tf apply -input=false tfplan
 rm -f "${STACK_DIR}/tfplan"
 
-log "Infraestrutura pronta. Próximo passo: infra/scripts/deploy-app.sh ${CLOUD}"
+log "Infraestrutura pronta. Próximo passo: infra/scripts/deploy-app.sh"
 tf output
