@@ -478,7 +478,7 @@ flowchart LR
 | --- | --- | --- |
 | `ci` | PR, push na `main` e "Run workflow" do `ci-cd` | `npm ci`, Prisma generate, lint, Prettier, build e testes com cobertura (artefato `coverage`) |
 | `validate-infra` | PR, push na `main` e "Run workflow" do `ci-cd`, em paralelo ao `ci` | `terraform fmt` e `validate` em `infra/azure` (sem acessar a Azure) e `kubectl kustomize` na base `k8s/` e nos overlays. Se falhar, o deploy não roda |
-| `image` | Depois do `ci` | Builda a imagem de produção e roda o Trivy (`CRITICAL`/`HIGH`). Fora de PR, publica no ACR a imagem da API e a dos Jobs, com o SHA curto do commit como tag |
+| `image` | Depois do `ci` | Builda a imagem da API e a dos Jobs e roda o Trivy (`CRITICAL`/`HIGH`) nas duas: bloqueante na da API e informativo na dos Jobs. Fora de PR, publica as duas no ACR, com o SHA curto do commit como tag |
 | `deploy` | Depois do `image`, só se as imagens foram publicadas | Jobs de migration e de criação do primeiro admin, overlay `cloud` (API, Service, Ingress, HPA), rollout e checagem de `/health` e `/ready`. As URLs aparecem no resumo da execução |
 | `provision` | Só pelo "Run workflow" do `infra` | `terraform plan` + `apply` em `infra/azure`: AKS, ACR, PostgreSQL, Key Vault e Ingress (~15-20 min) |
 | `destroy` | Só pelo "Run workflow" do `infra` | Remove a aplicação do cluster, o Ingress e o restante da infra com `terraform destroy` (~10-15 min) |
@@ -505,7 +505,7 @@ Sem a confirmação exata, o job falha antes de qualquer acesso à Azure. A senh
 
 - **Rode sempre o `destroy` ao terminar.** O AKS e o banco consomem crédito enquanto estiverem no ar.
 - **Não faça push na `main` enquanto `provision` ou `destroy` estiver rodando.** O deploy desse push falharia (sem custo, mas vermelho).
-- **O Trivy bloqueia a publicação:** com vulnerabilidade `CRITICAL` ou `HIGH` corrigível, a imagem não vai para o ACR e não há deploy.
+- **O Trivy bloqueia a publicação:** com vulnerabilidade `CRITICAL` ou `HIGH` corrigível na imagem da API, nada vai para o ACR e não há deploy. Na imagem dos Jobs o scan só reporta, porque ela leva as dependências de desenvolvimento.
 - Em pushes seguidos, só o commit mais recente da `main` é implantado; execuções de commits anteriores pulam o deploy.
 
 Tempo médio da pipeline: _TODO — preencher após a execução real_.

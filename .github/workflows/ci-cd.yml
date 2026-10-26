@@ -122,6 +122,7 @@ jobs:
       migration-image: ${{ steps.infra.outputs.migration_image }}
     env:
       IMAGE: garage-flow-api:${{ github.sha }}
+      JOBS_IMAGE: garage-flow-api-migration:${{ github.sha }}
       # Em PR só builda e escaneia. A credencial OIDC só aceita a main (ver infra/README.md).
       PUBLISH: ${{ github.event_name != 'pull_request' }}
       ARM_USE_OIDC: 'true'
@@ -148,7 +149,33 @@ jobs:
           # camada base rode a cada build e pegue as correções de segurança mais recentes.
           no-cache: true
 
-      - name: Scan de vulnerabilidades
+      # Estágio `build` (tem o Prisma CLI), usado pelos Jobs de migration e bootstrap-admin.
+      # Reaproveita o cache do builder deste job, então a camada base é a que acabou de ser
+      # refeita sem cache.
+      - name: Build da imagem dos Jobs
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          target: build
+          load: true
+          tags: ${{ env.JOBS_IMAGE }}
+
+      # Informativo, não bloqueia: o estágio `build` leva todas as devDependencies (jest,
+      # eslint, testcontainers) e o npm da imagem base, que acumulam achados sem relação com o
+      # que roda no Job. Para bloquear, seria preciso um estágio enxuto no Dockerfile, só com o
+      # Prisma CLI e as dependências de produção. Roda antes do scan da API para o relatório
+      # aparecer mesmo quando aquele scan falha.
+      - name: Scan da imagem dos Jobs (informativo)
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: ${{ env.JOBS_IMAGE }}
+          format: table
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+
+      - name: Scan da imagem de produção
         uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
           image-ref: ${{ env.IMAGE }}
@@ -208,26 +235,17 @@ jobs:
           REGISTRY_LOGIN: ${{ steps.infra.outputs.registry_login }}
         run: eval "$REGISTRY_LOGIN"
 
-      # Publica exatamente a imagem que passou pelo scan, sem rebuild.
-      - name: Publicar imagem da API
+      # Publica exatamente as imagens que passaram pelo scan, sem rebuild.
+      - name: Publicar imagens no ACR
         if: steps.infra.outputs.exists == 'true'
         env:
           API_IMAGE: ${{ steps.infra.outputs.api_image }}
+          MIGRATION_IMAGE: ${{ steps.infra.outputs.migration_image }}
         run: |
           docker tag "$IMAGE" "$API_IMAGE"
           docker push "$API_IMAGE"
-
-      # Estágio `build` (tem o Prisma CLI), usado pelos Jobs de migration e bootstrap-admin.
-      # Sem Trivy: tem dependências de desenvolvimento e nunca recebe tráfego. Reaproveita o
-      # cache do builder deste job, então a camada base é a que acabou de ser refeita sem cache.
-      - name: Build e publicação da imagem dos Jobs
-        if: steps.infra.outputs.exists == 'true'
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: .
-          target: build
-          push: true
-          tags: ${{ steps.infra.outputs.migration_image }}
+          docker tag "$JOBS_IMAGE" "$MIGRATION_IMAGE"
+          docker push "$MIGRATION_IMAGE"
 
   deploy:
     name: Deploy (Azure)
