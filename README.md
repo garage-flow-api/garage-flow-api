@@ -454,7 +454,7 @@ infra/scripts/destroy.sh       # remove tudo ao final da sessão
 
 ## Pipeline de CI/CD
 
-A pipeline fica em [`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml) (GitHub Actions) e usa a stack **Azure** de `infra/`. Ela cobre build da aplicação, testes automatizados, build da imagem Docker, deploy do banco (Terraform + Job de migration), deploy no cluster e aplicação dos manifestos. É a versão automatizada de `infra/scripts/provision.sh`, `deploy-app.sh` e `destroy.sh`.
+A pipeline usa GitHub Actions e a stack **Azure** de `infra/`, em dois workflows: [`ci-cd.yml`](.github/workflows/ci-cd.yml) (CI e deploy) e [`infra.yml`](.github/workflows/infra.yml) (criar e destruir a infra, só manualmente). Ela cobre build da aplicação, testes automatizados, build da imagem Docker, deploy do banco (Terraform + Job de migration), deploy no cluster e aplicação dos manifestos. É a versão automatizada de `infra/scripts/provision.sh`, `deploy-app.sh` e `destroy.sh`.
 
 ### Fluxo
 
@@ -466,30 +466,31 @@ flowchart LR
     IMG2 -->|"infra no ar"| DEP["deploy<br/>migration, admin, manifestos,<br/>rollout e health check"]
     IMG2 -.->|"infra destruída"| SKIP["deploy pulado"]
 
-    RUN["Run workflow"] -->|"action = provision"| PROV["provision<br/>terraform apply"]
-    RUN -->|"action = destroy"| DEST["destroy<br/>terraform destroy"]
-    RUN -->|"action = deploy"| CI2
+    RUNCD["Run workflow (ci-cd)"] --> CI2
+
+    RUNINFRA["Run workflow (infra)"] -->|"action = provision"| PROV["provision<br/>terraform apply"]
+    RUNINFRA -->|"action = destroy"| DEST["destroy<br/>terraform destroy"]
 ```
 
 ### Jobs
 
 | Job | Quando roda | O que faz |
 | --- | --- | --- |
-| `ci` | PR, push na `main` e "Run workflow" com `deploy` | `npm ci`, Prisma generate, lint, Prettier, build e testes com cobertura (artefato `coverage`) |
+| `ci` | PR, push na `main` e "Run workflow" do `ci-cd` | `npm ci`, Prisma generate, lint, Prettier, build e testes com cobertura (artefato `coverage`) |
 | `image` | Depois do `ci` | Builda a imagem de produção e roda o Trivy (`CRITICAL`/`HIGH`). Fora de PR, publica no ACR a imagem da API e a dos Jobs, com o SHA curto do commit como tag |
 | `deploy` | Depois do `image`, só se as imagens foram publicadas | Jobs de migration e de criação do primeiro admin, overlay `cloud` (API, Service, Ingress, HPA), rollout e checagem de `/health` e `/ready`. As URLs aparecem no resumo da execução |
-| `provision` | Só pelo "Run workflow" | `terraform plan` + `apply` em `infra/azure`: AKS, ACR, PostgreSQL, Key Vault e Ingress (~15-20 min) |
-| `destroy` | Só pelo "Run workflow" | Remove a aplicação do cluster, o Ingress e o restante da infra com `terraform destroy` (~10-15 min) |
+| `provision` | Só pelo "Run workflow" do `infra` | `terraform plan` + `apply` em `infra/azure`: AKS, ACR, PostgreSQL, Key Vault e Ingress (~15-20 min) |
+| `destroy` | Só pelo "Run workflow" do `infra` | Remove a aplicação do cluster, o Ingress e o restante da infra com `terraform destroy` (~10-15 min) |
 
 Nada cria ou destrói infraestrutura automaticamente. Em push na `main`, a pipeline só **lê** o state do Terraform: se a infra não existir, as imagens não são publicadas e o deploy é pulado, sem falhar. As mesmas verificações do Husky (Prettier, ESLint e testes) são repetidas no job `ci`.
 
 ### Provisionar, fazer deploy e destruir
 
-Em **Actions → ci-cd → Run workflow**, na branch `main`:
+Em **Actions → Run workflow**, na branch `main`:
 
-1. **Provision:** `action` = `provision` e `confirmacao` = `sim`. Aguarde terminar.
-2. **Deploy:** faça um push na `main`, ou rode com `action` = `deploy`. Ao final, o resumo da execução mostra as URLs da API, do Swagger e do health check (`http://<ip>.nip.io`).
-3. **Destroy:** `action` = `destroy` e `confirmacao` = `destruir`.
+1. **Provision:** workflow `infra`, `action` = `provision` e `confirmacao` = `sim`. Aguarde terminar.
+2. **Deploy:** faça um push na `main` ou rode o workflow `ci-cd`. Ao final, o resumo da execução mostra as URLs da API, do Swagger e do health check (`http://<ip>.nip.io`).
+3. **Destroy:** workflow `infra`, `action` = `destroy` e `confirmacao` = `destruir`.
 
 Sem a confirmação exata, o job falha antes de qualquer acesso à Azure. A senha do primeiro administrador fica no Key Vault; o comando para lê-la aparece no resumo do deploy.
 

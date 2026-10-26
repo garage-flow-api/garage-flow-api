@@ -1,0 +1,153 @@
+name: infra
+
+# Cria ou destrói a infra da Azure (Terraform). Só roda manualmente, com confirmação digitada:
+# nenhum push ou PR dispara este workflow. Espelha infra/scripts/provision.sh e destroy.sh.
+# O bootstrap do state remoto não roda aqui: o backend.hcl é versionado e o Storage Account do
+# state já existe (criado pelo Dev 3).
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'provision = cria a infra (consome crédito); destroy = remove tudo'
+        type: choice
+        options: [provision, destroy]
+        required: true
+      confirmacao:
+        description: "Digite 'sim' para provision ou 'destruir' para destroy, como nos scripts de infra/"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  provision:
+    name: Provisionar infra (Azure)
+    if: inputs.action == 'provision'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write # login OIDC na Azure
+    concurrency:
+      group: infra-staging
+      cancel-in-progress: false
+    # TODO: `environment: staging` só depois que existir a credencial federada desse
+    # environment; antes disso, ele quebraria o login OIDC até na main.
+    env:
+      ARM_USE_OIDC: 'true'
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+    defaults:
+      run:
+        working-directory: infra/azure
+    steps:
+      - name: Conferir confirmação
+        env:
+          CONFIRMACAO: ${{ inputs.confirmacao }}
+        working-directory: .
+        run: |
+          if [[ "$CONFIRMACAO" != "sim" ]]; then
+            echo "::error::Provision cria recursos que cobram crédito. Rode de novo com confirmacao = sim."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Login na Azure (OIDC)
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.16.4
+          terraform_wrapper: false
+
+      - name: Terraform init
+        run: terraform init -input=false -backend-config=backend.hcl
+
+      - name: Terraform plan
+        run: terraform plan -input=false -lock-timeout=5m -var-file=environments/staging.tfvars -out=tfplan
+
+      - name: Terraform apply (~15-20 min)
+        run: terraform apply -input=false -lock-timeout=5m tfplan
+
+      - name: Outputs
+        run: terraform output
+
+  destroy:
+    name: Destruir infra (Azure)
+    if: inputs.action == 'destroy'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write # login OIDC na Azure
+    concurrency:
+      group: infra-staging
+      cancel-in-progress: false
+    env:
+      ARM_USE_OIDC: 'true'
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+    defaults:
+      run:
+        working-directory: infra/azure
+    steps:
+      - name: Conferir confirmação
+        env:
+          CONFIRMACAO: ${{ inputs.confirmacao }}
+        working-directory: .
+        run: |
+          if [[ "$CONFIRMACAO" != "destruir" ]]; then
+            echo "::error::Destroy apaga cluster, banco (com os dados), registry e segredos. Rode de novo com confirmacao = destruir."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Login na Azure (OIDC)
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.16.4
+          terraform_wrapper: false
+
+      - name: Terraform init
+        run: terraform init -input=false -backend-config=backend.hcl
+
+      # Bloco 1 do destroy.sh: remove a aplicação antes do banco e do cluster.
+      - name: Remover a aplicação do cluster
+        run: |
+          if kubeconfig="$(terraform output -raw kubeconfig_command 2>/dev/null)" && eval "$kubeconfig"; then
+            kubectl delete -k ../kubernetes/overlays/cloud --ignore-not-found --wait=true || true
+            kubectl delete job garage-flow-migration garage-flow-bootstrap-admin --ignore-not-found || true
+          else
+            echo "::warning::Cluster inacessível ou já removido; seguindo para o terraform destroy."
+          fi
+
+      # Bloco 2: o Load Balancer é criado pelo Kubernetes, fora do Terraform. Removê-lo antes
+      # evita recursos de rede órfãos bloqueando a exclusão da VNet.
+      - name: Remover Ingress Controller e Load Balancer
+        run: |
+          terraform destroy -input=false -auto-approve -lock-timeout=5m \
+            -var-file=environments/staging.tfvars \
+            -target=module.kubernetes_platform.helm_release.ingress || true
+
+      # Bloco 3. O state remoto (Storage Account do bootstrap) é preservado.
+      - name: Terraform destroy (~10-15 min)
+        run: terraform destroy -input=false -auto-approve -lock-timeout=5m -var-file=environments/staging.tfvars
