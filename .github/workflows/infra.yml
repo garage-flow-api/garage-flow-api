@@ -1,9 +1,9 @@
 name: infra
 
-# Cria ou destrói a infra da Azure (Terraform). Só roda manualmente, com confirmação digitada:
-# nenhum push ou PR dispara este workflow. Espelha infra/scripts/provision.sh e destroy.sh.
-# O bootstrap do state remoto não roda aqui: o backend.hcl é versionado e o Storage Account do
-# state já existe (criado pelo Dev 3).
+# Cria ou destrói a infra da Azure (Terraform). Só roda manualmente, a partir da main e com
+# confirmação digitada: nenhum push ou PR dispara este workflow. Espelha
+# infra/scripts/provision.sh e destroy.sh. O bootstrap do state remoto não roda aqui: o
+# backend.hcl é versionado e o Storage Account do state já existe (criado pelo Dev 3).
 on:
   workflow_dispatch:
     inputs:
@@ -32,8 +32,6 @@ jobs:
     concurrency:
       group: infra-staging
       cancel-in-progress: false
-    # TODO: `environment: staging` só depois que existir a credencial federada desse
-    # environment; antes disso, ele quebraria o login OIDC até na main.
     env:
       ARM_USE_OIDC: 'true'
       ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
@@ -48,6 +46,10 @@ jobs:
           CONFIRMACAO: ${{ inputs.confirmacao }}
         working-directory: .
         run: |
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "::error::Provision só roda a partir da main (selecione a branch main no Run workflow)."
+            exit 1
+          fi
           if [[ "$CONFIRMACAO" != "sim" ]]; then
             echo "::error::Provision cria recursos que cobram crédito. Rode de novo com confirmacao = sim."
             exit 1
@@ -106,6 +108,10 @@ jobs:
           CONFIRMACAO: ${{ inputs.confirmacao }}
         working-directory: .
         run: |
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "::error::Destroy só roda a partir da main (selecione a branch main no Run workflow)."
+            exit 1
+          fi
           if [[ "$CONFIRMACAO" != "destruir" ]]; then
             echo "::error::Destroy apaga cluster, banco (com os dados), registry e segredos. Rode de novo com confirmacao = destruir."
             exit 1
@@ -136,6 +142,7 @@ jobs:
           if kubeconfig="$(terraform output -raw kubeconfig_command 2>/dev/null)" && eval "$kubeconfig"; then
             kubectl delete -k ../kubernetes/overlays/cloud --ignore-not-found --wait=true || true
             kubectl delete job garage-flow-migration garage-flow-bootstrap-admin --ignore-not-found || true
+            kubectl delete secret garage-flow-bootstrap-admin --ignore-not-found || true
           else
             echo "::warning::Cluster inacessível ou já removido; seguindo para o terraform destroy."
           fi

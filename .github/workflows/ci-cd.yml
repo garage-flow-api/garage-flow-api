@@ -123,8 +123,9 @@ jobs:
     env:
       IMAGE: garage-flow-api:${{ github.sha }}
       JOBS_IMAGE: garage-flow-api-migration:${{ github.sha }}
-      # Em PR só builda e escaneia. A credencial OIDC só aceita a main (ver infra/README.md).
-      PUBLISH: ${{ github.event_name != 'pull_request' }}
+      # Só publica a partir da main (push ou disparo manual). Em PR, ou num "Run workflow" de
+      # outra branch, só builda e escaneia. A credencial OIDC também só aceita a main.
+      PUBLISH: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
       ARM_USE_OIDC: 'true'
       ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
       ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
@@ -251,7 +252,9 @@ jobs:
     name: Deploy (Azure)
     # validate-infra também bloqueia: com infra/ ou overlays inválidos, nem tenta o deploy.
     needs: [image, validate-infra]
-    if: github.event_name != 'pull_request' && needs.image.outputs.published == 'true'
+    if: >-
+      github.event_name != 'pull_request' && github.ref == 'refs/heads/main' &&
+      needs.image.outputs.published == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     concurrency:
@@ -386,10 +389,28 @@ jobs:
           fi
           kubectl logs job/garage-flow-migration --tail=20 || true
 
-      # Idempotente: cria o primeiro admin só se ele ainda não existir.
+      # Idempotente: cria o primeiro admin só se ele ainda não existir. Como no deploy-app.sh,
+      # o Secret com as credenciais (outputs do Terraform; a senha também fica no Key Vault)
+      # só existe enquanto o Job roda: é criado aqui e apagado no step seguinte. A senha é
+      # mascarada no log e vai pelo stdin, nunca na linha de comando.
       - name: Job de bootstrap do admin
         if: steps.latest.outputs.skip != 'true'
         run: |
+          admin_name="$(terraform -chdir=infra/azure output -raw bootstrap_admin_name)"
+          admin_email="$(terraform -chdir=infra/azure output -raw bootstrap_admin_email)"
+          admin_password="$(terraform -chdir=infra/azure output -raw bootstrap_admin_password)"
+          echo "::add-mask::$admin_password"
+          kubectl apply -f - <<YAML
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: garage-flow-bootstrap-admin
+          type: Opaque
+          stringData:
+            ADMIN_NAME: "$admin_name"
+            ADMIN_EMAIL: "$admin_email"
+            ADMIN_PASSWORD: "$admin_password"
+          YAML
           kubectl delete job garage-flow-bootstrap-admin --ignore-not-found --wait=true
           kubectl apply -k "$RENDER_DIR/cloud-bootstrap-admin"
           if ! kubectl wait --for=condition=complete job/garage-flow-bootstrap-admin --timeout=300s; then
@@ -398,6 +419,11 @@ jobs:
             exit 1
           fi
           kubectl logs job/garage-flow-bootstrap-admin --tail=20 || true
+
+      # Equivale ao delete pós-Job + trap do deploy-app.sh: roda com sucesso ou falha.
+      - name: Remover o Secret do admin
+        if: always() && steps.latest.outputs.skip != 'true'
+        run: kubectl delete secret garage-flow-bootstrap-admin --ignore-not-found || true
 
       # ConfigMap, Deployment, Service, Ingress e HPA.
       - name: Aplicar manifestos da API

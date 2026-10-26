@@ -478,7 +478,7 @@ flowchart LR
 | --- | --- | --- |
 | `ci` | PR, push na `main` e "Run workflow" do `ci-cd` | `npm ci`, Prisma generate, lint, Prettier, build e testes com cobertura (artefato `coverage`) |
 | `validate-infra` | PR, push na `main` e "Run workflow" do `ci-cd`, em paralelo ao `ci` | `terraform fmt` e `validate` em `infra/azure` (sem acessar a Azure) e `kubectl kustomize` na base `k8s/` e nos overlays. Se falhar, o deploy não roda |
-| `image` | Depois do `ci` | Builda a imagem da API e a dos Jobs e roda o Trivy (`CRITICAL`/`HIGH`) nas duas: bloqueante na da API e informativo na dos Jobs. Fora de PR, publica as duas no ACR, com o SHA curto do commit como tag |
+| `image` | Depois do `ci` | Builda a imagem da API e a dos Jobs e roda o Trivy (`CRITICAL`/`HIGH`) nas duas: bloqueante na da API e informativo na dos Jobs. Na `main` (push ou disparo manual), publica as duas no ACR, com o SHA curto do commit como tag |
 | `deploy` | Depois do `image`, só se as imagens foram publicadas | Jobs de migration e de criação do primeiro admin, overlay `cloud` (API, Service, Ingress, HPA), rollout e checagem de `/health` e `/ready`. As URLs aparecem no resumo da execução |
 | `provision` | Só pelo "Run workflow" do `infra` | `terraform plan` + `apply` em `infra/azure`: AKS, ACR, PostgreSQL, Key Vault e Ingress (~15-20 min) |
 | `destroy` | Só pelo "Run workflow" do `infra` | Remove a aplicação do cluster, o Ingress e o restante da infra com `terraform destroy` (~10-15 min) |
@@ -493,13 +493,13 @@ Em **Actions → Run workflow**, na branch `main`:
 2. **Deploy:** faça um push na `main` ou rode o workflow `ci-cd`. Ao final, o resumo da execução mostra as URLs da API, do Swagger e do health check (`http://<ip>.nip.io`).
 3. **Destroy:** workflow `infra`, `action` = `destroy` e `confirmacao` = `destruir`.
 
-Sem a confirmação exata, o job falha antes de qualquer acesso à Azure. A senha do primeiro administrador fica no Key Vault; o comando para lê-la aparece no resumo do deploy.
+Fora da `main` ou sem a confirmação exata, o job falha antes de qualquer acesso à Azure. A senha do primeiro administrador fica no Key Vault; o comando para lê-la aparece no resumo do deploy.
 
 ### Credenciais
 
 - Login na Azure por **OIDC** (credencial federada do service principal `sp-garage-flow-github-actions`, aceita só para a `main`). **Nenhum secret é armazenado no GitHub.**
 - Três **repository variables** (Settings → Secrets and variables → Actions → Variables): `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` e `AZURE_SUBSCRIPTION_ID`. Não são valores sensíveis.
-- Os segredos da aplicação (senha do banco, `JWT_SECRET`, `TRACKING_TOKEN_SECRET`, senha do admin) são gerados pelo Terraform, guardados no Key Vault e criados como Secrets no cluster. A pipeline não os manipula.
+- Os segredos da aplicação (senha do banco, `JWT_SECRET`, `TRACKING_TOKEN_SECRET`, senha do admin) são gerados pelo Terraform e guardados no Key Vault; os da API viram o Secret `garage-flow-secrets` no cluster. As credenciais do primeiro admin só existem no cluster durante o Job de bootstrap: o deploy cria o Secret a partir dos outputs do Terraform, com a senha mascarada no log, e o apaga em seguida.
 
 ### Avisos
 
