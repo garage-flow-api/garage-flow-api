@@ -67,6 +67,43 @@ jobs:
           path: coverage/
           if-no-files-found: ignore
 
+  # Valida a infra como código em todo PR, sem acessar a Azure: erros em infra/ ou nos
+  # manifestos aparecem antes do merge, e não só no deploy. O init com -backend=false não lê
+  # o state remoto; só baixa os providers para o validate.
+  validate-infra:
+    name: Validar Terraform e Kustomize
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.16.4
+          terraform_wrapper: false
+
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive infra
+
+      - name: Terraform validate
+        run: |
+          for stack in infra/azure infra/azure/bootstrap; do
+            echo "== $stack"
+            terraform -chdir="$stack" init -backend=false -input=false
+            terraform -chdir="$stack" validate
+          done
+
+      # Renderiza a base e os overlays como no deploy (kubectl já vem no runner). Pega erro de
+      # sintaxe, recurso inexistente e patch que não casa com nada; não valida contra o cluster.
+      - name: Kustomize build
+        run: |
+          for dir in k8s infra/kubernetes/overlays/cloud infra/kubernetes/overlays/cloud-migration infra/kubernetes/overlays/cloud-bootstrap-admin; do
+            echo "== $dir"
+            kubectl kustomize "$dir" > /dev/null
+          done
+
   image:
     name: Imagem Docker, scan e publicação
     needs: ci
@@ -194,7 +231,8 @@ jobs:
 
   deploy:
     name: Deploy (Azure)
-    needs: image
+    # validate-infra também bloqueia: com infra/ ou overlays inválidos, nem tenta o deploy.
+    needs: [image, validate-infra]
     if: github.event_name != 'pull_request' && needs.image.outputs.published == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
