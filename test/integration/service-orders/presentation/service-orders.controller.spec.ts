@@ -152,7 +152,7 @@ describe('ServiceOrdersController (integration)', () => {
     const response = await request(app.getHttpServer()).get(`/service-orders/track/${token}`);
 
     expect(response.status).toBe(200);
-    expect(response.body.status).toBe('RECEIVED');
+    expect(response.body.status).toBe('Recebida');
   });
 
   it('deve assumir o status RECEIVED por padrão no banco quando não informado na inserção', async () => {
@@ -332,6 +332,45 @@ describe('ServiceOrdersController (integration)', () => {
       .send({ mechanicId });
 
     expect(response.status).toBe(404);
+  });
+
+  it('GET /service-orders/:id deve devolver o status nos termos do cliente', async () => {
+    const created = await request(app.getHttpServer())
+      .post('/service-orders')
+      .set('Authorization', adminAuthHeader())
+      .send(openServiceOrderBody());
+
+    const received = await request(app.getHttpServer())
+      .get(`/service-orders/${created.body.id}`)
+      .set('Authorization', adminAuthHeader());
+
+    expect(received.status).toBe(200);
+    expect(received.body.status).toBe('Recebida');
+
+    await putServiceOrderInDiagnosis(created.body.id);
+
+    const inDiagnosis = await request(app.getHttpServer())
+      .get(`/service-orders/${created.body.id}`)
+      .set('Authorization', adminAuthHeader());
+
+    expect(inDiagnosis.body.status).toBe('Diagnóstico');
+  });
+
+  it('GET /service-orders/track/:token deve devolver o mesmo status traduzido que a consulta por ID', async () => {
+    const created = await request(app.getHttpServer())
+      .post('/service-orders')
+      .set('Authorization', adminAuthHeader())
+      .send(openServiceOrderBody());
+    await putServiceOrderInDiagnosis(created.body.id);
+
+    const byId = await request(app.getHttpServer())
+      .get(`/service-orders/${created.body.id}`)
+      .set('Authorization', adminAuthHeader());
+    const token = (created.body.trackingLink as string).split('/track/')[1];
+    const byToken = await request(app.getHttpServer()).get(`/service-orders/track/${token}`);
+
+    expect(byToken.body.status).toBe('Diagnóstico');
+    expect(byToken.body.status).toBe(byId.body.status);
   });
 
   it('PATCH /service-orders/:id/start-diagnosis deve transicionar para IN_DIAGNOSIS e atribuir o mecânico', async () => {
@@ -663,7 +702,7 @@ describe('ServiceOrdersController (integration)', () => {
     const response = await request(app.getHttpServer()).get(`/service-orders/track/${token}`);
 
     expect(response.status).toBe(200);
-    expect(response.body.status).toBe('RECEIVED');
+    expect(response.body.status).toBe('Recebida');
     expect(response.body).not.toHaveProperty('id');
   });
 
