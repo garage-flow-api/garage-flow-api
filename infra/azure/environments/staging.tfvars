@@ -6,9 +6,9 @@ location        = "northcentralus"
 environment     = "staging"
 
 node_vm_size = "Standard_B2als_v2"
-node_count   = 2
+node_count   = 3 # cota da Azure for Students: 6 vCPUs na região (3 x 2 vCPU)
 
-db_sku_name   = "B_Standard_B1ms"
+db_sku_name   = "B_Standard_B2s" # o /health consulta o banco a cada requisição: B1ms gerava timeouts no k6
 db_storage_mb = 32768
 
 # Acesso aos secrets do Key Vault (RBAC). Object IDs não são segredos.
