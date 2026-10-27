@@ -1,0 +1,29 @@
+# API em cloud: ConfigMap, Deployment, Service, Ingress e HPA.
+#
+# Pré-requisitos (criados pelo Terraform em infra/azure):
+#   banco gerenciado, Secrets da aplicação e Service `garage-flow-postgres` (ExternalName).
+#
+# As imagens são substituídas no momento do deploy (ver infra/scripts/deploy-app.sh),
+# apontando para o ACR com a tag do commit.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../../../k8s
+
+components:
+  - ../../components/managed-database
+
+patches:
+  - patch: |-
+      $patch: delete
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: garage-flow-migration
+  - patch: |-
+      $patch: delete
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: garage-flow-bootstrap-admin

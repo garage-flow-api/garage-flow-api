@@ -1,0 +1,17 @@
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# backend.hcl (gerado pela stack de bootstrap) é versionado: o grupo compartilha o mesmo
+# state remoto na mesma assinatura (só nomes, sem credenciais).
+
+# Overlays temporários gerados por infra/scripts/deploy-app.sh
+kubernetes/.deploy/

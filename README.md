@@ -442,6 +442,20 @@ kubectl delete -f k8s/ --ignore-not-found
 
 Esse comando também remove o PVC e, consequentemente, os dados locais armazenados pelo PostgreSQL.
 
+## Infraestrutura em cloud — Terraform
+
+O provisionamento em cloud fica em [`infra/`](infra/README.md): AKS + PostgreSQL Flexible Server na Azure (Azure for Students). Os manifestos desta pasta `k8s/` são reaproveitados via Kustomize.
+
+- Guia de provisionamento, deploy e remoção: [infra/README.md](infra/README.md)
+- Decisões de arquitetura e trade-offs: [infra/docs/decisoes-de-infraestrutura.md](infra/docs/decisoes-de-infraestrutura.md)
+
+```bash
+infra/scripts/setup-azure.sh   # login, assinatura, providers e região (primeira vez)
+infra/scripts/provision.sh     # rede, cluster, banco, registry e segredos
+infra/scripts/deploy-app.sh    # imagens, migrations, primeiro admin e API
+infra/scripts/destroy.sh       # remove tudo ao final da sessão
+```
+
 ## Como usar e testar a API
 
 ### 1. Login

@@ -1,0 +1,23 @@
+# Base Kustomize com todos os manifestos desta pasta.
+#
+# O arquivo se chama `Kustomization` (sem extensão) de propósito: assim o fluxo local
+# `kubectl apply -f k8s/<arquivo>.yaml` e `kubectl delete -f k8s/` continua funcionando,
+# porque o kubectl ignora arquivos sem extensão .yaml/.yml/.json ao ler a pasta.
+#
+# Os overlays em `infra/kubernetes/overlays/` reaproveitam esta base para os ambientes em cloud.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - configmap.yaml
+  - secret.yaml
+  - admin-secret.yaml
+  - postgres-pvc.yaml
+  - postgres-service.yaml
+  - postgres-deployment.yaml
+  - migration-job.yaml
+  - bootstrap-admin-job.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+  - hpa.yaml
