@@ -39,5 +39,6 @@ export function makeClientRepositoryMock(): jest.Mocked<ClientRepository> {
     findById: jest.fn(),
     findByCpfCnpj: jest.fn(),
     update: jest.fn(),
+    findByPhone: jest.fn(),
   };
 }

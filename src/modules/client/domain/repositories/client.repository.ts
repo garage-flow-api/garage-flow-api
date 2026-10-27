@@ -6,4 +6,5 @@ export abstract class ClientRepository {
   abstract findById(id: string): Promise<ClientEntity | null>;
   abstract findByCpfCnpj(cpfCnpj: string): Promise<ClientEntity | null>;
   abstract update(client: ClientEntity): Promise<ClientEntity>;
+  abstract findByPhone(phone: string): Promise<ClientEntity | null>;
 }

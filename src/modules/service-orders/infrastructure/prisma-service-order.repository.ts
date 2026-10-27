@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@generated/prisma/client';
 import { PrismaService } from '@infra/database/prisma/prisma.service';
+import { PrismaTransactionContext } from '@infra/database/prisma/prisma-transaction-context';
 import { ServiceOrder } from '@service-orders/domain/entities/service-order.entity';
 import {
   type AverageExecutionTimeMetrics,
-  ServiceOrderListItem,
   ServiceOrderRepository,
 } from '@service-orders/domain/repositories/service-order.repository';
 import { ServiceOrderMapper } from '@service-orders/infrastructure/service-order.mapper';
@@ -14,12 +14,19 @@ import { type ServiceOrderStatus } from '@service-orders/domain/value-objects/se
 
 @Injectable()
 export class PrismaServiceOrderRepository implements ServiceOrderRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly transactionContext: PrismaTransactionContext,
+  ) {}
+
+  private get db(): Prisma.TransactionClient {
+    return this.transactionContext.current ?? this.prisma;
+  }
 
   async save(serviceOrder: ServiceOrder): Promise<ServiceOrder> {
     const data = ServiceOrderMapper.toPersistence(serviceOrder);
 
-    const raw = await this.prisma.$transaction(async (tx) => {
+    const persist = async (tx: Prisma.TransactionClient) => {
       await tx.serviceOrder.upsert({
         where: { id: serviceOrder.id },
         create: data,
@@ -33,12 +40,15 @@ export class PrismaServiceOrderRepository implements ServiceOrderRepository {
         where: { id: serviceOrder.id },
         include: { services: true, inventory: { include: { inventory: true } } },
       });
-    });
+    };
+
+    const current = this.transactionContext.current;
+    const raw = current ? await persist(current) : await this.prisma.$transaction(persist);
     return ServiceOrderMapper.toDomain(raw);
   }
 
   async findById(id: string): Promise<ServiceOrder | null> {
-    const raw = await this.prisma.serviceOrder.findFirst({
+    const raw = await this.db.serviceOrder.findFirst({
       where: { id, deleted_at: null },
       include: { services: true, inventory: { include: { inventory: true } } },
     });
@@ -46,8 +56,8 @@ export class PrismaServiceOrderRepository implements ServiceOrderRepository {
     return ServiceOrderMapper.toDomain(raw);
   }
 
-  async findAll(status?: ServiceOrderStatus, mechanicId?: string): Promise<ServiceOrderListItem[]> {
-    const raws = await this.prisma.serviceOrder.findMany({
+  async findAll(status?: ServiceOrderStatus, mechanicId?: string) {
+    const raws = await this.db.serviceOrder.findMany({
       where: {
         deleted_at: null,
         ...(status ? { status } : {}),
@@ -83,7 +93,7 @@ export class PrismaServiceOrderRepository implements ServiceOrderRepository {
     });
   }
 
-  async findAverageExecutionTime(from?: Date, to?: Date): Promise<AverageExecutionTimeMetrics> {
+  async findAverageExecutionTime(from?: Date, to?: Date) {
     const filters = [
       Prisma.sql`"deleted_at" IS NULL`,
       Prisma.sql`"status" IN ('FINISHED', 'DELIVERED')`,
@@ -93,14 +103,13 @@ export class PrismaServiceOrderRepository implements ServiceOrderRepository {
     if (from) filters.push(Prisma.sql`"service_finished_at" >= ${from}`);
     if (to) filters.push(Prisma.sql`"service_finished_at" < ${to}`);
 
-    const [metrics] = await this.prisma.$queryRaw<Array<AverageExecutionTimeMetrics>>(Prisma.sql`
+    const [metrics] = await this.db.$queryRaw<Array<AverageExecutionTimeMetrics>>(Prisma.sql`
       SELECT
         AVG(EXTRACT(EPOCH FROM ("service_finished_at" - "service_started_at")) / 60)::float8 AS "averageExecutionTimeMinutes",
         COUNT(*)::int AS "completedServiceOrders"
       FROM "service_orders"
       WHERE ${Prisma.join(filters, ' AND ')}
     `);
-
     return metrics;
   }
 

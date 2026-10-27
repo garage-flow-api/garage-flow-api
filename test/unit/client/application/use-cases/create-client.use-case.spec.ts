@@ -4,7 +4,7 @@ import { CreateClientUseCase } from '@client/application/use-cases/create-client
 import { type ClientRepository } from '@client/domain/repositories/client.repository';
 import { type ClientEntity } from '@client/domain/entities/client.entity';
 import { InvalidCpfCnpjError } from '@client/domain/value-objects/cpf-cnpj-validator.vo';
-import { makeClientRepositoryMock } from '../../client.factory';
+import { makeClient, makeClientRepositoryMock } from '../../client.factory';
 
 describe('CreateClientUseCase', () => {
   let repository: jest.Mocked<ClientRepository>;
@@ -59,6 +59,13 @@ describe('CreateClientUseCase', () => {
 
   it('rejeita documento já cadastrado com 409', async () => {
     repository.findByCpfCnpj.mockResolvedValue({} as ClientEntity);
+
+    await expect(useCase.execute(input)).rejects.toThrow(ConflictError);
+    expect(repository.create).not.toHaveBeenCalled();
+  });
+
+  it('deve lançar ConflictError se o telefone já estiver cadastrado', async () => {
+    repository.findByPhone.mockResolvedValue(makeClient());
 
     await expect(useCase.execute(input)).rejects.toThrow(ConflictError);
     expect(repository.create).not.toHaveBeenCalled();
