@@ -150,13 +150,16 @@ export class ServiceOrdersController {
   @Get()
   @ApiAuth()
   @ApiOperation({
-    summary: 'Retrieves all service orders',
+    summary: 'Retrieves the service orders in priority order',
+    description:
+      'Without the status filter, returns only open service orders (FINISHED, DELIVERED and CANCELED are hidden), ordered by status priority (in execution, awaiting approval, in diagnosis, received) and then oldest first. With the status filter, returns the service orders in that status, oldest first.',
   })
   @ApiQuery({
     name: 'status',
     enum: ServiceOrderStatus,
     required: false,
-    description: 'Use RECEIVED to list only orders available for diagnosis.',
+    description:
+      'Returns only orders in this status, including FINISHED, DELIVERED and CANCELED. Use RECEIVED to list only orders available for diagnosis.',
   })
   @ApiQuery({
     name: 'mechanicId',
