@@ -27,3 +27,11 @@ patches:
       kind: Job
       metadata:
         name: garage-flow-bootstrap-admin
+  # 3 nodes em cloud comportam mais réplicas que o cluster local.
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: garage-flow-hpa
+    patch: |-
+      - op: replace
+        path: /spec/maxReplicas
+        value: 8
