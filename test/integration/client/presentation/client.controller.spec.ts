@@ -155,7 +155,7 @@ describe('ClientController (integration)', () => {
         .send({ ...payload, cpfCnpj: '11222333000181' })
         .expect(409);
 
-      expect(response.body.message).toBe('Client with the same CPF/CNPJ or phone already exists');
+      expect(response.body.message).toBe('Phone already registered for another client');
     });
   });
 
