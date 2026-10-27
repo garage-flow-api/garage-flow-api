@@ -1,4 +1,5 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BusinessRuleError, NotFoundError } from '@common/errors/domain.error';
+
 import { CreateServiceOrderUseCase } from '@service-orders/application/use-cases/create-service-order.use-case';
 import { type ServiceOrderRepository } from '@service-orders/domain/repositories/service-order.repository';
 import { type CreateServiceOrderDto } from '@service-orders/presentation/dtos/create-service-order.dto';
@@ -50,26 +51,26 @@ describe('CreateServiceOrderUseCase', () => {
     expect(repository.save).toHaveBeenCalledWith(os);
   });
 
-  it('deve lançar BadRequestException se o veículo não pertencer ao cliente', async () => {
+  it('deve lançar BusinessRuleError se o veículo não pertencer ao cliente', async () => {
     findVehicleByLicensePlate.execute.mockResolvedValue({
       id: 'vehicle-1',
       clientId: 'outro-cliente',
     });
 
-    await expect(useCase.execute(buildDto())).rejects.toThrow(BadRequestException);
+    await expect(useCase.execute(buildDto())).rejects.toThrow(BusinessRuleError);
   });
 
-  it('deve propagar NotFoundException se o cliente não existir', async () => {
-    findClientByCpfCnpj.execute.mockRejectedValue(new NotFoundException('Cliente não encontrado'));
+  it('deve propagar NotFoundError se o cliente não existir', async () => {
+    findClientByCpfCnpj.execute.mockRejectedValue(new NotFoundError('Cliente não encontrado'));
 
-    await expect(useCase.execute(buildDto())).rejects.toThrow(NotFoundException);
+    await expect(useCase.execute(buildDto())).rejects.toThrow(NotFoundError);
   });
 
-  it('deve propagar NotFoundException se o veículo não existir', async () => {
+  it('deve propagar NotFoundError se o veículo não existir', async () => {
     findVehicleByLicensePlate.execute.mockRejectedValue(
-      new NotFoundException('Veículo não encontrado'),
+      new NotFoundError('Veículo não encontrado'),
     );
 
-    await expect(useCase.execute(buildDto())).rejects.toThrow(NotFoundException);
+    await expect(useCase.execute(buildDto())).rejects.toThrow(NotFoundError);
   });
 });

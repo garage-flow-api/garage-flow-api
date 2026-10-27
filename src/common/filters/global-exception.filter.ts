@@ -7,12 +7,20 @@ import {
   Logger,
 } from '@nestjs/common';
 import { type Request, type Response } from 'express';
-import { DomainError } from '@common/errors/domain.error';
+import { DomainError, type DomainErrorCode } from '@common/errors/domain.error';
 
 type HttpExceptionResponse = {
   message?: string | string[];
 };
 
+const HTTP_STATUS_BY_DOMAIN_CODE: Record<DomainErrorCode, HttpStatus> = {
+  INVALID_INPUT: HttpStatus.BAD_REQUEST,
+  NOT_FOUND: HttpStatus.NOT_FOUND,
+  CONFLICT: HttpStatus.CONFLICT,
+  BUSINESS_RULE_VIOLATION: HttpStatus.UNPROCESSABLE_ENTITY,
+  UNAUTHORIZED: HttpStatus.UNAUTHORIZED,
+  FORBIDDEN: HttpStatus.FORBIDDEN,
+};
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name);
@@ -39,10 +47,11 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
 
     if (exception instanceof DomainError) {
-      this.logger.warn(`${request.method} ${request.url} - Domain error: ${exception.message}`);
-      response
-        .status(HttpStatus.BAD_REQUEST)
-        .json(this.createResponse(HttpStatus.BAD_REQUEST, exception.message, request));
+      const status = this.statusFor(exception);
+      this.logger.warn(
+        `${request.method} ${request.url} - ${status} - ${exception.name}: ${exception.message}`,
+      );
+      response.status(status).json(this.createResponse(status, exception.message, request));
       return;
     }
 
@@ -75,5 +84,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       timestamp: new Date().toISOString(),
       path: request.url,
     };
+  }
+
+  private statusFor(error: DomainError): HttpStatus {
+    return HTTP_STATUS_BY_DOMAIN_CODE[error.code];
   }
 }

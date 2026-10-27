@@ -1,4 +1,5 @@
-import { ConflictException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { ConflictError, NotFoundError, UnauthorizedError } from '@common/errors/domain.error';
+
 import { type JwtService } from '@nestjs/jwt';
 
 import { User } from '@auth/domain/entities/user.entity';
@@ -83,7 +84,7 @@ describe('Auth Use Cases', () => {
         role: 'MECHANIC',
       });
 
-      await expect(promise).rejects.toThrow(ConflictException);
+      await expect(promise).rejects.toThrow(ConflictError);
       await expect(promise).rejects.toThrow('User already exists');
 
       expect(repository.create).not.toHaveBeenCalled();
@@ -108,7 +109,7 @@ describe('Auth Use Cases', () => {
 
       const useCase = new DeleteUserUseCase(repository);
 
-      await expect(useCase.execute('user-id')).rejects.toThrow(NotFoundException);
+      await expect(useCase.execute('user-id')).rejects.toThrow(NotFoundError);
     });
   });
 
@@ -127,7 +128,7 @@ describe('Auth Use Cases', () => {
 
       const useCase = new GetUserByEmailUseCase(repository);
 
-      await expect(useCase.execute('unknown@email.com')).rejects.toThrow(NotFoundException);
+      await expect(useCase.execute('unknown@email.com')).rejects.toThrow(NotFoundError);
     });
   });
 
@@ -179,7 +180,7 @@ describe('Auth Use Cases', () => {
           email: 'john@example.com',
           password: 'wrong',
         }),
-      ).rejects.toThrow(UnauthorizedException);
+      ).rejects.toThrow(UnauthorizedError);
     });
   });
 
@@ -214,7 +215,7 @@ describe('Auth Use Cases', () => {
       const useCase = new UpdateUserUseCase(repository, passwordHasher);
 
       await expect(useCase.execute({ id: 'unknown-id', name: 'Jane Doe' })).rejects.toThrow(
-        NotFoundException,
+        NotFoundError,
       );
     });
   });

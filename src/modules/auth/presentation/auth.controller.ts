@@ -81,10 +81,6 @@ export class AuthController {
   @ApiOkResponse({
     type: LoginResponseDto,
   })
-  @ApiNotFoundResponse({
-    type: ErrorResponseDto,
-    description: 'User not found',
-  })
   @ApiUnauthorizedResponse({
     type: ErrorResponseDto,
     description: 'Invalid email or password',

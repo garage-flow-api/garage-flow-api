@@ -1,7 +1,7 @@
 import { ServiceOrderStatus } from '@service-orders/domain/value-objects/service-order-status.vo';
 import { type ServiceItem } from '@service-orders/domain/entities/service-item.entity';
 import { type PartItem } from '@service-orders/domain/entities/part-item.entity';
-import { DomainError } from '@common/errors/domain.error';
+import { BusinessRuleError, ForbiddenError } from '@common/errors/domain.error';
 import {
   BaseDeletableEntity,
   type BaseDeletableEntityProps,
@@ -26,6 +26,30 @@ export interface UpdateServiceOrderProps {
   status?: ServiceOrderStatus;
   approvedAt?: Date | null;
 }
+
+const ALLOWED_TRANSITIONS: Record<ServiceOrderStatus, ServiceOrderStatus[]> = {
+  [ServiceOrderStatus.RECEIVED]: [ServiceOrderStatus.IN_DIAGNOSIS, ServiceOrderStatus.CANCELED],
+  [ServiceOrderStatus.IN_DIAGNOSIS]: [
+    ServiceOrderStatus.FINISHED_DIAGNOSIS,
+    ServiceOrderStatus.CANCELED,
+  ],
+  [ServiceOrderStatus.FINISHED_DIAGNOSIS]: [
+    ServiceOrderStatus.AWAITING_APPROVAL,
+    ServiceOrderStatus.CANCELED,
+  ],
+  [ServiceOrderStatus.AWAITING_APPROVAL]: [
+    ServiceOrderStatus.AWAITING_EXECUTION,
+    ServiceOrderStatus.CANCELED,
+  ],
+  [ServiceOrderStatus.AWAITING_EXECUTION]: [
+    ServiceOrderStatus.IN_EXECUTION,
+    ServiceOrderStatus.CANCELED,
+  ],
+  [ServiceOrderStatus.IN_EXECUTION]: [ServiceOrderStatus.FINISHED, ServiceOrderStatus.CANCELED],
+  [ServiceOrderStatus.FINISHED]: [ServiceOrderStatus.DELIVERED],
+  [ServiceOrderStatus.DELIVERED]: [],
+  [ServiceOrderStatus.CANCELED]: [],
+};
 
 export class ServiceOrder extends BaseDeletableEntity {
   private _vehicleId: string;
@@ -124,38 +148,23 @@ export class ServiceOrder extends BaseDeletableEntity {
   }
 
   updateStatus(newStatus: ServiceOrderStatus): void {
-    const allowedTransitions: Record<ServiceOrderStatus, ServiceOrderStatus[]> = {
-      [ServiceOrderStatus.RECEIVED]: [ServiceOrderStatus.IN_DIAGNOSIS, ServiceOrderStatus.CANCELED],
-      [ServiceOrderStatus.IN_DIAGNOSIS]: [
-        ServiceOrderStatus.FINISHED_DIAGNOSIS,
-        ServiceOrderStatus.CANCELED,
-      ],
-      [ServiceOrderStatus.FINISHED_DIAGNOSIS]: [
-        ServiceOrderStatus.AWAITING_APPROVAL,
-        ServiceOrderStatus.CANCELED,
-      ],
-      [ServiceOrderStatus.AWAITING_APPROVAL]: [
-        ServiceOrderStatus.AWAITING_EXECUTION,
-        ServiceOrderStatus.CANCELED,
-      ],
-      [ServiceOrderStatus.AWAITING_EXECUTION]: [
-        ServiceOrderStatus.IN_EXECUTION,
-        ServiceOrderStatus.CANCELED,
-      ],
-      [ServiceOrderStatus.IN_EXECUTION]: [ServiceOrderStatus.FINISHED, ServiceOrderStatus.CANCELED],
-      [ServiceOrderStatus.FINISHED]: [ServiceOrderStatus.DELIVERED],
-      [ServiceOrderStatus.DELIVERED]: [],
-      [ServiceOrderStatus.CANCELED]: [],
-    };
+    this.assertCanTransitionTo(newStatus);
+    this._status = newStatus;
+    this.touch();
+  }
 
-    if (!allowedTransitions[this._status].includes(newStatus)) {
-      throw new DomainError(
+  private assertCanTransitionTo(newStatus: ServiceOrderStatus): void {
+    if (!ALLOWED_TRANSITIONS[this._status].includes(newStatus)) {
+      throw new BusinessRuleError(
         `Invalid service order status transition: ${this._status} -> ${newStatus}`,
       );
     }
+  }
 
-    this._status = newStatus;
-    this.touch();
+  private assertAssignedMechanic(mechanicId: string, action: 'start' | 'finish'): void {
+    if (this._mechanicId !== mechanicId) {
+      throw new ForbiddenError(`Only the mechanic assigned to the service order can ${action} it`);
+    }
   }
 
   canAccessBudget(): boolean {
@@ -179,9 +188,8 @@ export class ServiceOrder extends BaseDeletableEntity {
   }
 
   finishDiagnosis(mechanicId: string): void {
-    if (this._mechanicId !== mechanicId) {
-      throw new DomainError('Only the mechanic assigned to the service order can finish it');
-    }
+    this.assertCanTransitionTo(ServiceOrderStatus.FINISHED_DIAGNOSIS);
+    this.assertAssignedMechanic(mechanicId, 'finish');
     this.updateStatus(ServiceOrderStatus.FINISHED_DIAGNOSIS);
   }
 
@@ -200,18 +208,16 @@ export class ServiceOrder extends BaseDeletableEntity {
   }
 
   startService(mechanicId: string, startedAt = new Date()): void {
-    if (this._mechanicId !== mechanicId) {
-      throw new DomainError('Only the mechanic assigned to the service order can start it');
-    }
+    this.assertCanTransitionTo(ServiceOrderStatus.IN_EXECUTION);
+    this.assertAssignedMechanic(mechanicId, 'start');
 
     this.updateStatus(ServiceOrderStatus.IN_EXECUTION);
     this._serviceStartedAt = startedAt;
   }
 
   finishService(mechanicId: string, finishedAt = new Date()): void {
-    if (this._mechanicId !== mechanicId) {
-      throw new DomainError('Only the mechanic assigned to the service order can finish it');
-    }
+    this.assertCanTransitionTo(ServiceOrderStatus.FINISHED);
+    this.assertAssignedMechanic(mechanicId, 'finish');
 
     this.updateStatus(ServiceOrderStatus.FINISHED);
     this._serviceFinishedAt = finishedAt;

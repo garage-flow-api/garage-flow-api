@@ -64,6 +64,26 @@ export default tseslint.config(
     },
   },
 
+  // Clean Architecture: domain/application não conhecem exceções HTTP do Nest
+  {
+    files: ['src/modules/*/domain/**/*.ts', 'src/modules/*/application/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@nestjs/common'],
+              importNamePattern: 'Exception$',
+              message:
+                'Nas camadas domain/application use os erros de @common/errors/domain.error.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // Regras específicas para testes
   {
     files: ['test/**/*.ts', 'src/**/*.spec.ts', 'src/**/*.test.ts'],

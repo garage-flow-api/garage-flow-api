@@ -1,4 +1,5 @@
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundError } from '@common/errors/domain.error';
+
 import { UpdateVehicleUseCase } from '@vehicle/application/use-cases/update-vehicle.use-case';
 import { type VehicleRepository } from '@vehicle/domain/repositories/vehicle.repository';
 import { type VehicleEntity } from '@vehicle/domain/entities/vehicle.entity';
@@ -40,9 +41,7 @@ describe('UpdateVehicleUseCase', () => {
   it('lança 404 e não persiste quando o veículo não existe', async () => {
     repository.findById.mockResolvedValue(null);
 
-    await expect(useCase.execute('inexistente', { model: 'Polo' })).rejects.toThrow(
-      NotFoundException,
-    );
+    await expect(useCase.execute('inexistente', { model: 'Polo' })).rejects.toThrow(NotFoundError);
     expect(repository.update).not.toHaveBeenCalled();
   });
 });

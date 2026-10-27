@@ -1,4 +1,5 @@
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundError } from '@common/errors/domain.error';
+
 import { UpdatePartUseCase } from '@inventory/application/use-cases/update-part.use-case';
 import { type PartRepository } from '@inventory/domain/repositories/part.repository';
 import { Quantity } from '@inventory/domain/value-objects/quantity.vo';
@@ -32,11 +33,11 @@ describe('UpdatePartUseCase', () => {
     expect(repository.save).toHaveBeenCalledWith(part);
   });
 
-  it('deve lançar NotFoundException quando a peça não existe', async () => {
+  it('deve lançar NotFoundError quando a peça não existe', async () => {
     repository.findById.mockResolvedValue(null);
 
     await expect(useCase.execute('unknown', { name: 'X', unitPrice: 10 })).rejects.toThrow(
-      NotFoundException,
+      NotFoundError,
     );
   });
 });

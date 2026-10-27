@@ -1,10 +1,9 @@
-import { NotFoundException } from '@nestjs/common';
 import { type WriteOffPartsUseCase } from '@inventory/application/use-cases/write-off-parts.use-case';
 import { FinishServiceUseCase } from '@service-orders/application/use-cases/finish-service.use-case';
 import { type PartItem } from '@service-orders/domain/entities/part-item.entity';
 import { type ServiceOrderRepository } from '@service-orders/domain/repositories/service-order.repository';
 import { ServiceOrderStatus } from '@service-orders/domain/value-objects/service-order-status.vo';
-import { DomainError } from '@common/errors/domain.error';
+import { DomainError, NotFoundError } from '@common/errors/domain.error';
 import { makeServiceOrder, makePartItem } from '../service-order.factory';
 
 describe('FinishServiceUseCase', () => {
@@ -72,7 +71,7 @@ describe('FinishServiceUseCase', () => {
   it('returns not found when the order does not exist', async () => {
     repository.findById.mockResolvedValue(null);
 
-    await expect(useCase.execute('missing-order', 'mechanic-1')).rejects.toThrow(NotFoundException);
+    await expect(useCase.execute('missing-order', 'mechanic-1')).rejects.toThrow(NotFoundError);
     expect(writeOffParts.execute).not.toHaveBeenCalled();
   });
 });

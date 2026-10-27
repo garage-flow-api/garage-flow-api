@@ -1,4 +1,5 @@
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundError } from '@common/errors/domain.error';
+
 import { FindClientByIdUseCase } from '@client/application/use-cases/find-client-by-id.use-case';
 import { type ClientRepository } from '@client/domain/repositories/client.repository';
 import { makeClient, makeClientRepositoryMock } from '../../client.factory';
@@ -23,6 +24,6 @@ describe('FindClientByIdUseCase', () => {
   it('lança 404 quando o cliente não existe', async () => {
     repository.findById.mockResolvedValue(null);
 
-    await expect(useCase.execute('inexistente')).rejects.toThrow(NotFoundException);
+    await expect(useCase.execute('inexistente')).rejects.toThrow(NotFoundError);
   });
 });

@@ -8,7 +8,6 @@ const AUTH_TAG_LENGTH = 16;
 export class InvalidTrackingTokenError extends DomainError {
   constructor() {
     super('Invalid tracking token');
-    this.name = 'InvalidTrackingTokenError';
   }
 }
 

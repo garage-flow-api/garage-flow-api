@@ -1,4 +1,5 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { ConflictError, NotFoundError } from '@common/errors/domain.error';
+
 import { CreateVehicleUseCase } from '@vehicle/application/use-cases/create-vehicle.use-case';
 import { type VehicleRepository } from '@vehicle/domain/repositories/vehicle.repository';
 import { type VehicleEntity } from '@vehicle/domain/entities/vehicle.entity';
@@ -62,21 +63,21 @@ describe('CreateVehicleUseCase', () => {
   it('rejeita com 404 quando o cliente não existe', async () => {
     clientRepository.findById.mockResolvedValue(null);
 
-    await expect(useCase.execute(input)).rejects.toThrow(NotFoundException);
+    await expect(useCase.execute(input)).rejects.toThrow(NotFoundError);
     expect(vehicleRepository.create).not.toHaveBeenCalled();
   });
 
   it('rejeita placa já cadastrada com 409', async () => {
     vehicleRepository.findByLicensePlate.mockResolvedValue({} as VehicleEntity);
 
-    await expect(useCase.execute(input)).rejects.toThrow(ConflictException);
+    await expect(useCase.execute(input)).rejects.toThrow(ConflictError);
     expect(vehicleRepository.create).not.toHaveBeenCalled();
   });
 
   it('valida o dono antes de consultar a placa', async () => {
     clientRepository.findById.mockResolvedValue(null);
 
-    await expect(useCase.execute(input)).rejects.toThrow(NotFoundException);
+    await expect(useCase.execute(input)).rejects.toThrow(NotFoundError);
     expect(vehicleRepository.findByLicensePlate).not.toHaveBeenCalled();
   });
 

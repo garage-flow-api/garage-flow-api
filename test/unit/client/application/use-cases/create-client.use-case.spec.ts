@@ -1,4 +1,5 @@
-import { ConflictException } from '@nestjs/common';
+import { ConflictError } from '@common/errors/domain.error';
+
 import { CreateClientUseCase } from '@client/application/use-cases/create-client.use-case';
 import { type ClientRepository } from '@client/domain/repositories/client.repository';
 import { type ClientEntity } from '@client/domain/entities/client.entity';
@@ -59,7 +60,7 @@ describe('CreateClientUseCase', () => {
   it('rejeita documento já cadastrado com 409', async () => {
     repository.findByCpfCnpj.mockResolvedValue({} as ClientEntity);
 
-    await expect(useCase.execute(input)).rejects.toThrow(ConflictException);
+    await expect(useCase.execute(input)).rejects.toThrow(ConflictError);
     expect(repository.create).not.toHaveBeenCalled();
   });
 });

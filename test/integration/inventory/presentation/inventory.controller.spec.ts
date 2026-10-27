@@ -216,7 +216,7 @@ describe('InventoryController (integration)', () => {
       expect(response.body.quantity).toBe(0);
     });
 
-    it('returns 400 when consuming more than the available stock', async () => {
+    it('returns 422 when consuming more than the available stock', async () => {
       const part = await prisma.inventory.create({
         data: { name: 'Óleo', unitOfMeasure: 'ML', unitPrice: 30, quantity: 10 },
       });
@@ -225,7 +225,7 @@ describe('InventoryController (integration)', () => {
         .patch(`/inventory/${part.id}/consume`)
         .set('Authorization', adminAuthHeader())
         .send({ quantity: 11 })
-        .expect(400);
+        .expect(422);
     });
 
     it('returns 404 for an unknown id', async () => {

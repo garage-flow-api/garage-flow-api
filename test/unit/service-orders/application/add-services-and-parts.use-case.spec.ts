@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BusinessRuleError, DomainError, NotFoundError } from '@common/errors/domain.error';
 import { AddServicesAndPartsUseCase } from '@service-orders/application/use-cases/add-services-and-parts.use-case';
 import { ServiceOrder } from '@service-orders/domain/entities/service-order.entity';
 import { ServiceItem } from '@service-orders/domain/entities/service-item.entity';
@@ -14,7 +14,6 @@ import { makePart } from '../../inventory/part.factory';
 import { type FindServicesByIdListUseCase } from '@service/application/use-cases/find-services-by-id-list.use-case';
 import { type CalculateTotalAmountUseCase } from '@service-orders/application/use-cases/calculate-total-amount.use-case';
 import { ServiceOrderStatus } from '@service-orders/domain/value-objects/service-order-status.vo';
-import { DomainError } from '@common/errors/domain.error';
 
 describe('AddServicesAndPartsUseCase', () => {
   let repository: jest.Mocked<ServiceOrderRepository>;
@@ -112,11 +111,11 @@ describe('AddServicesAndPartsUseCase', () => {
     ]);
   });
 
-  it('deve lançar NotFoundException se a OS não existir', async () => {
+  it('deve lançar NotFoundError se a OS não existir', async () => {
     repository.findById.mockResolvedValue(null);
 
     await expect(useCase.execute('os-inexistente', buildDto(), 'mechanic-1')).rejects.toThrow(
-      NotFoundException,
+      NotFoundError,
     );
   });
 
@@ -129,7 +128,7 @@ describe('AddServicesAndPartsUseCase', () => {
       ],
     };
 
-    await expect(useCase.execute('os-1', dto, 'mechanic-1')).rejects.toThrow(BadRequestException);
+    await expect(useCase.execute('os-1', dto, 'mechanic-1')).rejects.toThrow(DomainError);
     expect(repository.findById).not.toHaveBeenCalled();
     expect(checkPartsAvailability.execute).not.toHaveBeenCalled();
   });
@@ -152,11 +151,11 @@ describe('AddServicesAndPartsUseCase', () => {
     expect(repository.save).not.toHaveBeenCalled();
   });
 
-  it('deve lançar BadRequestException se a quantidade de peça for maior que a disponível', async () => {
+  it('deve lançar BusinessRuleError se a quantidade de peça for maior que a disponível', async () => {
     checkPartsAvailability.execute.mockResolvedValue([buildAvailability(1)]); // pediu 2, só tem 1
 
     await expect(useCase.execute('os-1', buildDto(), 'mechanic-1')).rejects.toThrow(
-      BadRequestException,
+      BusinessRuleError,
     );
   });
 
@@ -165,7 +164,7 @@ describe('AddServicesAndPartsUseCase', () => {
     checkPartsAvailability.execute.mockResolvedValue([buildAvailability(10, 9)]);
 
     await expect(useCase.execute('os-1', buildDto(), 'mechanic-1')).rejects.toThrow(
-      BadRequestException,
+      BusinessRuleError,
     );
     expect(repository.save).not.toHaveBeenCalled();
   });
@@ -178,20 +177,16 @@ describe('AddServicesAndPartsUseCase', () => {
     expect(repository.save).toHaveBeenCalled();
   });
 
-  it('deve propagar NotFoundException se o serviço não existir', async () => {
-    findServicesByIdList.execute.mockRejectedValue(new NotFoundException('Serviço não encontrado'));
+  it('deve propagar NotFoundError se o serviço não existir', async () => {
+    findServicesByIdList.execute.mockRejectedValue(new NotFoundError('Serviço não encontrado'));
 
-    await expect(useCase.execute('os-1', buildDto(), 'mechanic-1')).rejects.toThrow(
-      NotFoundException,
-    );
+    await expect(useCase.execute('os-1', buildDto(), 'mechanic-1')).rejects.toThrow(NotFoundError);
   });
 
-  it('deve propagar NotFoundException se a peça não existir', async () => {
-    checkPartsAvailability.execute.mockRejectedValue(new NotFoundException('Peça não encontrada'));
+  it('deve propagar NotFoundError se a peça não existir', async () => {
+    checkPartsAvailability.execute.mockRejectedValue(new NotFoundError('Peça não encontrada'));
 
-    await expect(useCase.execute('os-1', buildDto(), 'mechanic-1')).rejects.toThrow(
-      NotFoundException,
-    );
+    await expect(useCase.execute('os-1', buildDto(), 'mechanic-1')).rejects.toThrow(NotFoundError);
   });
 
   it('não deve chamar dependências de serviço quando não há serviços informados', async () => {

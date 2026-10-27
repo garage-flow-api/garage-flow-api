@@ -1,4 +1,5 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { BusinessRuleError } from '@common/errors/domain.error';
+import { Injectable } from '@nestjs/common';
 import { ServiceOrder } from '@service-orders/domain/entities/service-order.entity';
 import { ServiceOrderRepository } from '@service-orders/domain/repositories/service-order.repository';
 import { CreateServiceOrderDto } from '@service-orders/presentation/dtos/create-service-order.dto';
@@ -18,7 +19,7 @@ export class CreateServiceOrderUseCase {
 
     const vehicle = await this.findVehicleByLicensePlate.execute(dto.licensePlate);
     if (vehicle.clientId !== client.id) {
-      throw new BadRequestException('Vehicle does not belong to the informed client');
+      throw new BusinessRuleError('Vehicle does not belong to the informed client');
     }
 
     const serviceOrder = ServiceOrder.create(vehicle.id, dto.description, [], [], 0);
