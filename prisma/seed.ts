@@ -106,7 +106,7 @@ async function main() {
     },
     {
       id: seedIds.clients[2],
-      cpfCnpj: '28984756001',
+      cpfCnpj: '28984756024',
       name: 'Mariana Costa',
       address: 'Rua Augusta, 800 - Sao Paulo/SP',
       phone: '11988887777',
@@ -114,7 +114,7 @@ async function main() {
     },
     {
       id: seedIds.clients[3],
-      cpfCnpj: '43876512000190',
+      cpfCnpj: '43876512000129',
       name: 'Logistica Horizonte Ltda.',
       address: 'Rodovia Anhanguera, 1200 - Campinas/SP',
       phone: '1932221100',
