@@ -54,6 +54,100 @@ Neste repositório, o ambiente de desenvolvimento é executado com Docker Compos
 - **Husky**
 - **SonarQube** (análise estática de código, apenas em desenvolvimento)
 
+## Desenho da arquitetura
+
+A solução tem três partes: a API (componentes da aplicação), a infraestrutura na Azure em que ela roda e o fluxo de deploy que leva cada versão até o cluster.
+
+### Componentes da aplicação
+
+Monólito NestJS organizado em contextos de negócio (`auth`, `client`, `vehicle`, `service`, `inventory`, `service-orders`), cada um com as mesmas quatro camadas. As dependências apontam para o domínio: os casos de uso dependem de repositórios abstratos, implementados com Prisma na camada de infraestrutura.
+
+```mermaid
+flowchart LR
+    staff(["Usuários da oficina<br/>JWT + papéis"])
+    customer(["Cliente da oficina<br/>link de rastreamento"])
+    external(["Sistema externo<br/>webhook com assinatura HMAC"])
+
+    subgraph api["API NestJS · monólito"]
+        direction LR
+        subgraph presentation["Presentation"]
+            ctrl["Controllers + DTOs<br/>validação e Swagger em /docs"]
+            guards["Guards<br/>JWT · papéis · assinatura do webhook"]
+        end
+        subgraph application["Application"]
+            uc["Casos de uso<br/>um por operação"]
+        end
+        subgraph domain["Domain"]
+            model["Entidades e value objects<br/>regras de negócio e erros de domínio"]
+            ports["Repositórios abstratos"]
+        end
+        subgraph infrastructure["Infrastructure"]
+            repos["Repositórios Prisma + mappers<br/>transação única na abertura da OS"]
+        end
+        filter["Filtro global de exceções<br/>erro de domínio → status HTTP"]
+        monitoring["Monitoring<br/>/health · /ready"]
+    end
+
+    db[("PostgreSQL 16")]
+
+    staff --> guards
+    customer --> ctrl
+    external --> guards
+    guards --> ctrl --> uc
+    uc --> model
+    uc --> ports
+    repos -. implementa .-> ports
+    repos --> db
+    monitoring --> db
+    uc -. erros .-> filter
+```
+
+### Infraestrutura provisionada
+
+Criada pelo Terraform em [`infra/azure`](infra/README.md), no ambiente `staging` (região `northcentralus`, AKS com 2 nodes `Standard_B2als_v2`). O banco não tem endpoint público: só é alcançável de dentro da VNet do cluster. Os segredos são gerados pelo Terraform e guardados no Key Vault.
+
+```mermaid
+flowchart TB
+    user(["Cliente HTTP"])
+    gha(["GitHub Actions<br/>login OIDC"])
+
+    subgraph azure["Azure · staging"]
+        acr[("ACR Basic<br/>imagens da API e dos Jobs")]
+        kv[("Key Vault<br/>segredos gerados pelo Terraform")]
+
+        subgraph vnet["VNet"]
+            lb["Azure Load Balancer<br/>IP público · host IP.nip.io"]
+            subgraph aks["AKS"]
+                ingress["NGINX Ingress Controller"]
+                api["Pods da API<br/>HPA 1–5 réplicas por CPU"]
+                jobs["Jobs<br/>migration · primeiro admin"]
+                secrets["Secret garage-flow-secrets<br/>ConfigMap garage-flow-config"]
+                alias["Service ExternalName<br/>garage-flow-postgres"]
+            end
+            subgraph snetpg["Subnet delegada"]
+                pg[("PostgreSQL Flexible Server 16<br/>B_Standard_B1ms · acesso privado")]
+            end
+        end
+    end
+
+    user --> lb --> ingress --> api
+    api --> alias
+    jobs --> alias
+    alias -. DNS privado .-> pg
+    secrets -.-> api
+    secrets -.-> jobs
+    aks -. AcrPull .-> acr
+    gha -- push das imagens --> acr
+    gha -- kubectl --> aks
+    kv -. mesmos valores .- secrets
+```
+
+O ambiente local (Docker Desktop, com o PostgreSQL dentro do cluster) está descrito em [Ambiente de produção — Kubernetes](#ambiente-de-produção--kubernetes).
+
+### Fluxo de deploy
+
+Cada push na `main` passa pelos testes, gera as imagens, aplica as migrations e atualiza a API no AKS. A infraestrutura é criada e destruída só manualmente. O desenho completo, com os jobs e os gatilhos, está em [Pipeline de CI/CD](#pipeline-de-cicd).
+
 ## Arquitetura
 
 O projeto utiliza **Domain-Driven Design (DDD)** combinado com **arquitetura em camadas**, dentro de um monólito. Todos os contextos de negócio ficam agrupados em `src/modules/`.
