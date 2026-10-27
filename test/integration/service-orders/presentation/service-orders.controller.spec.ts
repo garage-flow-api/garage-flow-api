@@ -338,7 +338,7 @@ describe('ServiceOrdersController (integration)', () => {
     const created = await request(app.getHttpServer())
       .post('/service-orders')
       .set('Authorization', adminAuthHeader())
-      .send({ clientCpfCnpj, licensePlate, description: 'Ruído no motor' });
+      .send(openServiceOrderBody());
 
     const received = await request(app.getHttpServer())
       .get(`/service-orders/${created.body.id}`)
@@ -360,7 +360,7 @@ describe('ServiceOrdersController (integration)', () => {
     const created = await request(app.getHttpServer())
       .post('/service-orders')
       .set('Authorization', adminAuthHeader())
-      .send({ clientCpfCnpj, licensePlate, description: 'Ruído no motor' });
+      .send(openServiceOrderBody());
     await putServiceOrderInDiagnosis(created.body.id);
 
     const byId = await request(app.getHttpServer())
