@@ -5,7 +5,7 @@ import { ClientRepository } from '@client/domain/repositories/client.repository'
 import { ClientEntity } from '@client/domain/entities/client.entity';
 import { ClientMapper } from '@client/infrastructure/client.mapper';
 import { ConflictError } from '@common/errors/domain.error';
-import { Prisma, type PrismaClient } from '@generated/prisma/client';
+import { Prisma } from '@generated/prisma/client';
 
 const UNIQUE_VIOLATION = 'P2002';
 
