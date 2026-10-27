@@ -1,12 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { type Prisma } from '@generated/prisma/client';
 import { PrismaService } from '@infra/database/prisma/prisma.service';
 import { PrismaTransactionContext } from '@infra/database/prisma/prisma-transaction-context';
 import { ClientRepository } from '@client/domain/repositories/client.repository';
 import { ClientEntity } from '@client/domain/entities/client.entity';
 import { ClientMapper } from '@client/infrastructure/client.mapper';
 import { ConflictError } from '@common/errors/domain.error';
-import { Prisma } from '@generated/prisma/client';
+import { Prisma, type PrismaClient } from '@generated/prisma/client';
 
 const UNIQUE_VIOLATION = 'P2002';
 
