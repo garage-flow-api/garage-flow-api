@@ -64,43 +64,71 @@ Monólito NestJS organizado em contextos de negócio (`auth`, `client`, `vehicle
 
 ```mermaid
 flowchart LR
-    staff(["Usuários da oficina<br/>JWT + papéis"])
-    customer(["Cliente da oficina<br/>link de rastreamento"])
-    external(["Sistema externo<br/>webhook com assinatura HMAC"])
+    staff(["Equipe da oficina"])
+    customer(["Cliente da oficina"])
+    external(["Sistema de aprovação<br/>de orçamento"])
 
-    subgraph api["API NestJS · monólito"]
+    subgraph api["API NestJS"]
         direction LR
-        subgraph presentation["Presentation"]
-            ctrl["Controllers + DTOs<br/>validação e Swagger em /docs"]
-            guards["Guards<br/>JWT · papéis · assinatura do webhook"]
+        subgraph presentation["1 · Presentation"]
+            guards["Guards<br/>JWT · papéis · HMAC"]
+            ctrl["Controllers + DTOs<br/>validação · Swagger /docs"]
         end
-        subgraph application["Application"]
+        subgraph application["2 · Application"]
             uc["Casos de uso<br/>um por operação"]
         end
-        subgraph domain["Domain"]
-            model["Entidades e value objects<br/>regras de negócio e erros de domínio"]
-            ports["Repositórios abstratos"]
+        subgraph domain["3 · Domain"]
+            model["Entidades e value objects<br/>regras de negócio"]
+            ports["Repositórios<br/>abstratos"]
         end
-        subgraph infrastructure["Infrastructure"]
-            repos["Repositórios Prisma + mappers<br/>transação única na abertura da OS"]
+        subgraph infrastructure["4 · Infrastructure"]
+            repos["Repositórios Prisma<br/>+ mappers · transações"]
         end
-        filter["Filtro global de exceções<br/>erro de domínio → status HTTP"]
-        monitoring["Monitoring<br/>/health · /ready"]
+        subgraph crosscutting["Transversal"]
+            filter["Filtro global de exceções<br/>erro de domínio → HTTP"]
+            monitoring["Monitoring<br/>/health · /ready"]
+        end
     end
 
     db[("PostgreSQL 16")]
 
-    staff --> guards
-    customer --> ctrl
-    external --> guards
-    guards --> ctrl --> uc
-    uc --> model
+    staff -- "HTTP + JWT" --> guards
+    external -- "webhook assinado" --> guards
+    customer -- "link de rastreamento<br/>sem login" --> ctrl
+    guards --> ctrl
+    ctrl -- "chama" --> uc
+    uc -- "aplica regras" --> model
     uc --> ports
-    repos -. implementa .-> ports
-    repos --> db
-    monitoring --> db
-    uc -. erros .-> filter
+    repos -. "implementa" .-> ports
+    repos -- "SQL" --> db
+    monitoring -- "checa conexão" --> db
+    uc -. "erro de domínio" .-> filter
+
+    classDef actor fill:#f1f5f9,stroke:#475569,color:#0f172a
+    classDef pres fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef app fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef dom fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef infra fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+    classDef cross fill:#f3f4f6,stroke:#6b7280,color:#111827
+    classDef data fill:#e0f2fe,stroke:#0369a1,color:#0c4a6e
+
+    class staff,customer,external actor
+    class guards,ctrl pres
+    class uc app
+    class model,ports dom
+    class repos infra
+    class filter,monitoring cross
+    class db data
+
+    style api fill:none,stroke:#64748b,stroke-width:2px
+    style presentation fill:none,stroke:#2563eb,stroke-dasharray:5 4
+    style application fill:none,stroke:#16a34a,stroke-dasharray:5 4
+    style domain fill:none,stroke:#d97706,stroke-dasharray:5 4
+    style infrastructure fill:none,stroke:#7c3aed,stroke-dasharray:5 4
+    style crosscutting fill:none,stroke:#6b7280,stroke-dasharray:5 4
 ```
+
+Cores: azul = apresentação, verde = aplicação, amarelo = domínio, roxo = infraestrutura e cinza = recursos transversais. Setas tracejadas indicam dependência indireta (implementação de interface ou tratamento de erro).
 
 ### Infraestrutura provisionada
 
@@ -112,35 +140,59 @@ flowchart TB
     gha(["GitHub Actions<br/>login OIDC"])
 
     subgraph azure["Azure · staging"]
-        acr[("ACR Basic<br/>imagens da API e dos Jobs")]
+        direction TB
+        acr[("ACR<br/>imagens da API e dos Jobs")]
         kv[("Key Vault<br/>segredos gerados pelo Terraform")]
 
         subgraph vnet["VNet"]
-            lb["Azure Load Balancer<br/>IP público · host IP.nip.io"]
+            lb["Load Balancer<br/>IP público · IP.nip.io"]
             subgraph aks["AKS"]
                 ingress["NGINX Ingress Controller"]
                 api["Pods da API<br/>HPA 1–5 réplicas por CPU"]
                 jobs["Jobs<br/>migration · primeiro admin"]
-                secrets["Secret garage-flow-secrets<br/>ConfigMap garage-flow-config"]
+                config["Secret + ConfigMap<br/>variáveis da API"]
                 alias["Service ExternalName<br/>garage-flow-postgres"]
             end
-            subgraph snetpg["Subnet delegada"]
-                pg[("PostgreSQL Flexible Server 16<br/>B_Standard_B1ms · acesso privado")]
+            subgraph snetpg["Subnet privada"]
+                pg[("PostgreSQL<br/>Flexible Server 16")]
             end
         end
     end
 
-    user --> lb --> ingress --> api
-    api --> alias
-    jobs --> alias
-    alias -. DNS privado .-> pg
-    secrets -.-> api
-    secrets -.-> jobs
-    aks -. AcrPull .-> acr
-    gha -- push das imagens --> acr
-    gha -- kubectl --> aks
-    kv -. mesmos valores .- secrets
+    user -- "HTTP" --> lb
+    lb --> ingress
+    ingress -- "roteia para" --> api
+    api -- "consulta o banco" --> alias
+    jobs -- "aplica schema" --> alias
+    alias -. "DNS privado · TLS" .-> pg
+    config -.-> api
+    config -.-> jobs
+    aks -. "AcrPull" .-> acr
+    gha -- "1 · push das imagens" --> acr
+    gha -- "2 · kubectl apply" --> aks
+    kv -. "mesmos segredos" .- config
+
+    classDef actor fill:#f1f5f9,stroke:#475569,color:#0f172a
+    classDef edge fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef app fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef job fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef conf fill:#f3f4f6,stroke:#6b7280,color:#111827
+    classDef data fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+
+    class user,gha actor
+    class lb,ingress edge
+    class api app
+    class jobs job
+    class config,alias conf
+    class pg,acr,kv data
+
+    style azure fill:none,stroke:#0078d4,stroke-width:2px
+    style vnet fill:none,stroke:#64748b,stroke-dasharray:5 4
+    style aks fill:none,stroke:#326ce5,stroke-width:2px
+    style snetpg fill:none,stroke:#7c3aed,stroke-dasharray:5 4
 ```
+
+Cores: azul = entrada de tráfego, verde = API, amarelo = Jobs, roxo = dados e registros, cinza = configuração. A numeração nas setas do GitHub Actions indica a ordem do deploy.
 
 O ambiente local (Docker Desktop, com o PostgreSQL dentro do cluster) está descrito em [Ambiente de produção — Kubernetes](#ambiente-de-produção--kubernetes).
 
@@ -561,16 +613,46 @@ A pipeline usa GitHub Actions e a stack **Azure** de `infra/`, em dois workflows
 
 ```mermaid
 flowchart LR
-    PR["Pull request"] --> CI1["ci"] --> IMG1["image<br/>build + Trivy"]
+    subgraph sgManual["Manual · workflow infra"]
+        direction LR
+        RUNINFRA(["Run workflow"]) -- "provision + sim" --> PROV["provision<br/>terraform apply"]
+        RUNINFRA -- "destroy + destruir" --> DEST["destroy<br/>terraform destroy"]
+    end
 
-    PUSH["Push na main"] --> CI2["ci"] --> IMG2["image<br/>build + Trivy + push no ACR"]
-    IMG2 -->|"infra no ar"| DEP["deploy<br/>migration, admin, manifestos,<br/>rollout e health check"]
-    IMG2 -.->|"infra destruída"| SKIP["deploy pulado"]
+    subgraph sgMain["main · workflow ci-cd"]
+        direction LR
+        PUSH(["Push na main"]) --> CI2["ci<br/>lint · build · testes"]
+        PUSH --> VAL2["validate-infra<br/>Terraform · Kustomize"]
+        CI2 --> IMG2["image<br/>build + Trivy + push no ACR"]
+        IMG2 -- "infra no ar" --> DEP["deploy<br/>migration · admin · manifestos<br/>rollout · health check"]
+        VAL2 --> DEP
+        IMG2 -. "infra destruída" .-> SKIP["deploy pulado"]
+    end
 
-    RUNCD["Run workflow (ci-cd)"] --> CI2
+    subgraph sgPr["Pull request"]
+        direction LR
+        PR(["Pull request"]) --> CI1["ci<br/>lint · build · testes"]
+        PR --> VAL1["validate-infra<br/>Terraform · Kustomize"]
+        CI1 --> IMG1["image<br/>build + Trivy"]
+    end
 
-    RUNINFRA["Run workflow (infra)"] -->|"action = provision"| PROV["provision<br/>terraform apply"]
-    RUNINFRA -->|"action = destroy"| DEST["destroy<br/>terraform destroy"]
+    classDef trigger fill:#f1f5f9,stroke:#475569,color:#0f172a
+    classDef check fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef build fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef deploy fill:#bbf7d0,stroke:#15803d,color:#14532d,stroke-width:2px
+    classDef infra fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef skip fill:#f9fafb,stroke:#9ca3af,color:#4b5563,stroke-dasharray:4 3
+
+    class PR,PUSH,RUNINFRA trigger
+    class CI1,CI2,VAL1,VAL2 check
+    class IMG1,IMG2 build
+    class DEP deploy
+    class PROV,DEST infra
+    class SKIP skip
+
+    style sgPr fill:none,stroke:#2563eb,stroke-dasharray:5 4
+    style sgMain fill:none,stroke:#16a34a,stroke-dasharray:5 4
+    style sgManual fill:none,stroke:#d97706,stroke-dasharray:5 4
 ```
 
 ### Jobs
@@ -580,7 +662,7 @@ flowchart LR
 | `ci` | PR, push na `main` e "Run workflow" do `ci-cd` | `npm ci`, Prisma generate, lint, Prettier, build e testes com cobertura (artefato `coverage`) |
 | `validate-infra` | PR, push na `main` e "Run workflow" do `ci-cd`, em paralelo ao `ci` | `terraform fmt` e `validate` em `infra/azure` (sem acessar a Azure) e `kubectl kustomize` na base `k8s/` e nos overlays. Se falhar, o deploy não roda |
 | `image` | Depois do `ci` | Builda a imagem da API e a dos Jobs e roda o Trivy (`CRITICAL`/`HIGH`) nas duas: bloqueante na da API e informativo na dos Jobs. Na `main` (push ou disparo manual), publica as duas no ACR, com o SHA curto do commit como tag |
-| `deploy` | Depois do `image`, só se as imagens foram publicadas | Jobs de migration e de criação do primeiro admin, overlay `cloud` (API, Service, Ingress, HPA), rollout e checagem de `/health` e `/ready`. As URLs aparecem no resumo da execução |
+| `deploy` | Depois do `image` e do `validate-infra`, só na `main` e se as imagens foram publicadas | Jobs de migration e de criação do primeiro admin, overlay `cloud` (API, Service, Ingress, HPA), rollout e checagem de `/health` e `/ready`. As URLs aparecem no resumo da execução |
 | `provision` | Só pelo "Run workflow" do `infra` | `terraform plan` + `apply` em `infra/azure`: AKS, ACR, PostgreSQL, Key Vault e Ingress (~15-20 min) |
 | `destroy` | Só pelo "Run workflow" do `infra` | Remove a aplicação do cluster, o Ingress e o restante da infra com `terraform destroy` (~10-15 min) |
 
@@ -609,7 +691,7 @@ Fora da `main` ou sem a confirmação exata, o job falha antes de qualquer acess
 - **O Trivy bloqueia a publicação:** com vulnerabilidade `CRITICAL` ou `HIGH` corrigível na imagem da API, nada vai para o ACR e não há deploy. Na imagem dos Jobs o scan só reporta, porque ela leva as dependências de desenvolvimento.
 - Em pushes seguidos, só o commit mais recente da `main` é implantado; execuções de commits anteriores pulam o deploy.
 
-Tempo médio da pipeline: _TODO — preencher após a execução real_.
+Tempo da pipeline com deploy: cerca de **8 minutos** de ponta a ponta (`ci` ~1,5 min → `image` ~4 min → `deploy` ~2,5 min; o `validate-infra` roda em paralelo), medido na primeira execução real.
 
 ## Como usar e testar a API
 
