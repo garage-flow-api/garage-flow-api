@@ -1,6 +1,39 @@
 # Garage Flow API
 
-Backend de um sistema de gerenciamento para oficina mecânica, desenvolvido como um monólito utilizando **NestJS, TypeScript, PostgreSQL, Prisma e Docker**.
+Backend de um sistema de gerenciamento para oficina mecânica, desenvolvido como um monólito utilizando **NestJS, TypeScript, PostgreSQL e Prisma**, conteinerizado com Docker e executado em produção com Kubernetes.
+
+## Fase 1 do Tech Challenge
+
+Na Fase 1, o desafio foi desenvolver a primeira versão (MVP) do backend de um sistema integrado para uma oficina mecânica. A solução teve como objetivo substituir processos manuais e planilhas, melhorando o controle dos atendimentos, do estoque e do histórico de clientes e veículos.
+
+O escopo dessa etapa contemplou:
+
+- cadastro e gerenciamento de clientes, veículos, serviços, peças e insumos;
+- criação de ordens de serviço com cálculo de orçamento;
+- aprovação do orçamento e acompanhamento dos diferentes status da OS;
+- controle de estoque e monitoramento do tempo de execução dos serviços;
+- autenticação JWT para as funcionalidades administrativas;
+- validação de dados como CPF, CNPJ e placa do veículo;
+- API REST documentada com Swagger;
+- aplicação de DDD e arquitetura em camadas em um backend monolítico;
+- execução da aplicação e do banco de dados com Docker e Docker Compose;
+- testes automatizados dos principais fluxos da aplicação.
+
+Essa primeira versão estabeleceu a base funcional e arquitetural que é evoluída na Fase 2.
+
+## Fase 2 do Tech Challenge
+
+Na Fase 2, a aplicação desenvolvida na etapa anterior passa a ser preparada para suportar o crescimento da oficina, a expansão para novas unidades e os picos de utilização. O objetivo é aumentar a qualidade, a resiliência e a escalabilidade da solução por meio de:
+
+- evolução da organização do código e dos testes automatizados;
+- conteinerização da aplicação com Docker;
+- orquestração da API e do PostgreSQL com Kubernetes;
+- escalabilidade automática conforme o consumo de CPU e memória;
+- provisionamento de infraestrutura como código com Terraform;
+- automação do processo de build e deploy com CI/CD;
+- validação do comportamento da aplicação sob carga.
+
+Neste repositório, o ambiente de desenvolvimento é executado com Docker Compose, enquanto o ambiente de produção utiliza os manifestos Kubernetes, incluindo migrations e a criação segura do primeiro administrador.
 
 ## Tecnologias
 
@@ -8,6 +41,9 @@ Backend de um sistema de gerenciamento para oficina mecânica, desenvolvido como
 - **PostgreSQL**
 - **Prisma ORM**
 - **Docker / Docker Compose**
+- **Kubernetes**
+- **Horizontal Pod Autoscaler (HPA)**
+- **k6**
 - **Swagger**
 - **class-validator**
 - **Jest + Supertest**
@@ -20,93 +56,35 @@ Backend de um sistema de gerenciamento para oficina mecânica, desenvolvido como
 O projeto utiliza **Domain-Driven Design (DDD)** combinado com **arquitetura em camadas**, dentro de um monólito. Todos os contextos de negócio ficam agrupados em `src/modules/`.
 
 ```text
+garage-flow-api/
 ├── src/
-│   │
-│   ├── modules/
-│   │   │
-│   │   ├── auth/
-│   │   │   ├── domain/
-│   │   │   │   ├── entities/
-│   │   │   │   ├── value-objects/
-│   │   │   │   └── repositories/
-│   │   │   ├── application/
-│   │   │   │   └── use-cases/
-│   │   │   ├── infrastructure/
-│   │   │   │   ├── persistence/
-│   │   │   │   └── security/
-│   │   │   └── presentation/
-│   │   │       ├── auth.controller.ts
-│   │   │       └── dto/
-│   │   │
-│   │   ├── client/
-│   │   │   ├── domain/
-│   │   │   │   ├── entities/
-│   │   │   │   ├── value-objects/
-│   │   │   │   └── repositories/
-│   │   │   ├── application/
-│   │   │   │   └── use-cases/
-│   │   │   ├── infrastructure/
-│   │   │   └── presentation/
-│   │   │       ├── client.controller.ts
-│   │   │       └── dtos/
-│   │   │
-│   │   ├── vehicle/
-│   │   │   ├── domain/
-│   │   │   ├── application/
-│   │   │   ├── infrastructure/
-│   │   │   └── presentation/
-│   │   │
-│   │   ├── service/
-│   │   │   ├── domain/
-│   │   │   ├── application/
-│   │   │   ├── infrastructure/
-│   │   │   └── presentation/
-│   │   │
-│   │   ├── inventory/
-│   │   │   ├── domain/
-│   │   │   │   ├── entities/
-│   │   │   │   ├── value-objects/
-│   │   │   │   └── repositories/
-│   │   │   ├── application/
-│   │   │   │   └── use-cases/
-│   │   │   ├── infrastructure/
-│   │   │   └── presentation/
-│   │   │       ├── inventory.controller.ts
-│   │   │       └── dtos/
-│   │   │
-│   │   └── service-orders/
-│   │       ├── domain/
-│   │       │   ├── entities/
-│   │       │   ├── value-objects/
-│   │       │   └── repositories/
-│   │       ├── application/
-│   │       │   └── use-cases/
-│   │       ├── infrastructure/
-│   │       │   └── security/
-│   │       └── presentation/
-│   │           ├── service-orders.controller.ts
-│   │           └── dtos/
-│   │
-│   ├── infra/
-│   │   ├── database/
-│   │   │   └── prisma/
-│   │   │       ├── prisma.module.ts
-│   │   │       └── prisma.service.ts
-│   │   │
-│   │   └── health/
-│   │       ├── health.module.ts
-│   │       ├── health.controller.ts
-│   │       └── health.service.ts
-│   │
-│   ├── common/
-│   │   ├── guards/
-│   │   ├── filters/
-│   │   ├── pipes/
+│   ├── common/                  # Recursos compartilhados
 │   │   ├── decorators/
-│   │   └── errors/
-│   │
+│   │   ├── dtos/
+│   │   ├── entities/
+│   │   ├── errors/
+│   │   ├── filters/
+│   │   └── pipes/
+│   ├── infra/                   # Infraestrutura global da aplicação
+│   │   ├── database/prisma/
+│   │   └── monitoring/
+│   ├── modules/                 # Contextos de negócio
+│   │   ├── auth/
+│   │   ├── client/
+│   │   ├── inventory/
+│   │   ├── service/
+│   │   ├── service-orders/
+│   │   └── vehicle/
+│   ├── shared/
 │   ├── app.module.ts
 │   └── main.ts
+├── prisma/                      # Schema, migrations, seed e bootstrap do admin
+├── test/                        # Testes unitários e de integração
+├── k8s/                         # Manifestos Kubernetes
+├── k6/                          # Teste de carga
+├── Dockerfile
+├── docker-compose.development.yaml
+└── package.json
 ```
 
 ### Bounded Contexts
@@ -120,7 +98,16 @@ O projeto utiliza **Domain-Driven Design (DDD)** combinado com **arquitetura em 
 
 Além dos contextos de negócio, `common` contém elementos compartilhados pela aplicação (guards, filtros de exceção, pipes, decorators e erros de domínio) e `infra` contém recursos de infraestrutura que não pertencem a um contexto específico (conexão com o banco, health check).
 
-## Executando o projeto
+## Ambientes de execução
+
+| Ambiente | Forma de execução | Configuração |
+| --- | --- | --- |
+| Desenvolvimento | Docker Compose | `docker-compose.development.yaml` e `.env` |
+| Produção | Kubernetes | Manifestos da pasta `k8s/` |
+
+Não existe um Docker Compose de produção. O estágio `production` do `Dockerfile` gera a imagem enxuta utilizada pelo Deployment da API no Kubernetes.
+
+## Ambiente de desenvolvimento
 
 ### Pré-requisitos
 
@@ -130,10 +117,10 @@ Além dos contextos de negócio, `common` contém elementos compartilhados pela 
 
 ### 1. Configuração
 
-Crie o arquivo `.env` a partir do `.env.example`:
+Crie o arquivo `.env` a partir do `.env.example` e utilize `NODE_ENV=development`:
 
 ```env
-NODE_ENV=production
+NODE_ENV=development
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/garage-flow?schema=public
 
 # Autenticação (JWT)
@@ -144,31 +131,15 @@ JWT_EXPIRES_IN=1d
 TRACKING_TOKEN_SECRET=troque-por-outro-segredo-forte
 ```
 
-
-O projeto tem dois arquivos de Docker Compose, um por ambiente:
-
-- `docker-compose.production.yaml`: builda o estágio `production` (imagem enxuta, sem devDependencies), repassa as variáveis de autenticação e rastreamento definidas no `.env` e roda a aplicação já compilada (`node dist/src/main`).
-- `docker-compose.development.yaml`: builda o estágio `development` do `Dockerfile` (com devDependencies), monta o código como volume e roda com **hot reload** (`start:debug`).
+O arquivo `.env` é utilizado pelo Docker Compose e pelos comandos executados localmente. No ambiente de produção, as configurações são fornecidas pelos recursos `ConfigMap` e `Secret` do Kubernetes.
 
 ### 2. Subir a aplicação
-
-Para avaliação (ambiente de produção), na raiz do projeto:
-
-```bash
-docker compose -f docker-compose.production.yaml up --build
-```
-
-Esse compose sobe, nessa ordem: PostgreSQL, um container `migrate` (que roda `prisma migrate deploy`), um container `seed` (que cria os usuários e dados de demonstração) e só então a API.
-
-Os containers `migrate` e `seed` usam o estágio `build`, que ainda possui a CLI do Prisma, e encerram após concluir. A API só inicia quando ambos terminam com sucesso.
-
-Os usuários do seed usam a senha padrão `Password123!`, adequada para o ambiente de avaliação local.
-
-### Ambiente de desenvolvimento
 
 ```bash
 docker compose -f docker-compose.development.yaml up --build
 ```
+
+O `docker-compose.development.yaml` utiliza o estágio `development` do `Dockerfile`, instala as dependências de desenvolvimento e monta o código como volume para permitir **hot reload** com `start:debug`.
 
 O Docker Compose inicia:
 
@@ -177,7 +148,7 @@ O Docker Compose inicia:
 - API NestJS;
 - aplicação das migrations e do seed do Prisma.
 
-A aplicação aguarda o PostgreSQL estar saudável antes de iniciar. O código é montado como volume, permitindo **hot reload** durante o desenvolvimento.
+A API aguarda o PostgreSQL ficar saudável, gera o Prisma Client, executa as migrations e popula o banco com os dados de demonstração antes de iniciar. Os usuários criados pelo seed usam a senha padrão `Password123!`.
 
 ### 3. Acessos
 
@@ -199,13 +170,293 @@ Acesse:
 
 O Prisma Studio é utilizado para visualizar e manipular os dados do banco durante o desenvolvimento.
 
+## Ambiente de produção — Kubernetes
+
+O ambiente de produção é executado com Kubernetes. Para a avaliação local, os manifestos da pasta `k8s/` permitem implantar a API e o PostgreSQL no cluster do Docker Desktop, incluindo configuração, persistência, migrations, criação do primeiro administrador, monitoramento e escalabilidade automática.
+
+### Arquitetura do ambiente Kubernetes
+
+```text
+                         Cliente
+                            |
+                            v
+                    Ingress Controller
+                            |
+                            v
+                  garage-flow-ingress
+                            |
+                            v
+                  garage-flow-service
+                      (ClusterIP)
+                            |
+                            v
+                garage-flow-deployment
+                     Pods da API
+                            |
+                            v
+                 garage-flow-postgres
+                      (ClusterIP)
+                            |
+                            v
+                PostgreSQL Deployment
+                            |
+                            v
+                           PVC
+
+
+Migration Job -----------------> PostgreSQL
+Bootstrap Admin Job -----------> PostgreSQL
+
+Metrics Server
+      |
+      v
+     HPA
+      |
+      v
+garage-flow-deployment
+```
+
+### Recursos provisionados
+
+| Manifesto | Recurso criado |
+| --- | --- |
+| `k8s/configmap.yaml` | Variáveis não sensíveis da API |
+| `k8s/secret.yaml` | Credenciais do banco e segredos da aplicação |
+| `k8s/postgres-pvc.yaml` | Volume persistente de 1 GiB para o PostgreSQL |
+| `k8s/postgres-deployment.yaml` | Deployment do PostgreSQL 16 |
+| `k8s/postgres-service.yaml` | Service interno do PostgreSQL |
+| `k8s/migration-job.yaml` | Job responsável por executar `prisma migrate deploy` |
+| `k8s/admin-secret.yaml` | Credenciais temporárias do primeiro administrador |
+| `k8s/bootstrap-admin-job.yaml` | Job que cria o primeiro usuário `ADMIN` |
+| `k8s/deployment.yaml` | Deployment da API com recursos, liveness e readiness probes |
+| `k8s/service.yaml` | Service interno da API |
+| `k8s/hpa.yaml` | Escalabilidade automática por CPU e memória |
+| `k8s/ingress.yaml` | Roteamento HTTP por meio de NGINX Ingress |
+
+> Os valores presentes em `k8s/secret.yaml` e `k8s/admin-secret.yaml` são destinados somente ao ambiente local de demonstração. Em uma produção real, utilize um gerenciador de segredos da cloud e não versione credenciais reais no repositório.
+
+### Pré-requisitos
+
+- Docker Desktop com Kubernetes habilitado;
+- `kubectl` configurado para o cluster `docker-desktop`;
+- Metrics Server para coletar as métricas utilizadas pelo HPA;
+- NGINX Ingress Controller caso o manifesto de Ingress seja utilizado;
+- k6 instalado para executar o teste de carga.
+
+### 1. Selecionar o cluster
+
+No Docker Desktop, habilite o Kubernetes e aguarde o cluster ficar disponível. Em seguida:
+
+```bash
+kubectl config get-contexts
+kubectl config use-context <contexto-do-cluster>
+kubectl cluster-info
+kubectl get nodes
+```
+
+O nó deve aparecer com o status `Ready`.
+
+### 2. Buildar as imagens locais
+
+O Deployment da API utiliza a imagem `garage-flow-api:local`:
+
+```bash
+docker build \
+  --target production \
+  -t garage-flow-api:local \
+  .
+```
+
+Os Jobs de migration e bootstrap do administrador utilizam uma imagem baseada no estágio `build`, que contém a CLI do Prisma e as ferramentas necessárias para executar os scripts:
+
+```bash
+docker build \
+  --target build \
+  -t garage-flow-api-migration:local \
+  .
+```
+
+Confirme que as imagens foram criadas:
+
+```bash
+docker image inspect garage-flow-api:local
+docker image inspect garage-flow-api-migration:local
+```
+
+Os manifestos utilizam `imagePullPolicy: IfNotPresent`, permitindo que o cluster use as imagens disponíveis localmente no Docker Desktop.
+
+### 3. Aplicar configurações e banco de dados
+
+```bash
+kubectl apply -f k8s/secret.yaml
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/postgres-pvc.yaml
+kubectl apply -f k8s/postgres-service.yaml
+kubectl apply -f k8s/postgres-deployment.yaml
+```
+
+Aguarde o PostgreSQL ficar disponível:
+
+```bash
+kubectl rollout status \
+  deployment/garage-flow-postgres \
+  --timeout=180s
+```
+
+### 4. Executar as migrations
+
+```bash
+kubectl delete job garage-flow-migration --ignore-not-found
+kubectl apply -f k8s/migration-job.yaml
+
+kubectl wait \
+  --for=condition=complete \
+  job/garage-flow-migration \
+  --timeout=180s
+
+kubectl logs job/garage-flow-migration
+```
+
+Antes de executar o Prisma, o Job utiliza um init container para aguardar o PostgreSQL aceitar conexões.
+
+### 5. Criar o primeiro administrador
+
+Antes de aplicar o Secret, altere os valores de `ADMIN_NAME`, `ADMIN_EMAIL` e `ADMIN_PASSWORD` em `k8s/admin-secret.yaml`. A senha deve ter entre 8 e 128 caracteres e conter pelo menos uma letra e um número.
+
+Em seguida, execute o bootstrap:
+
+```bash
+kubectl apply -f k8s/admin-secret.yaml
+kubectl delete job garage-flow-bootstrap-admin --ignore-not-found
+kubectl apply -f k8s/bootstrap-admin-job.yaml
+
+kubectl wait \
+  --for=condition=complete \
+  job/garage-flow-bootstrap-admin \
+  --timeout=180s
+
+kubectl logs job/garage-flow-bootstrap-admin
+```
+
+O Job executa `npm run db:bootstrap-admin` e cria somente um usuário com a role `ADMIN`. Ele é idempotente: se já existir um administrador ativo, encerra sem criar outro usuário e sem alterar a senha existente.
+
+Depois da conclusão, remova do cluster o Secret usado no bootstrap:
+
+```bash
+kubectl delete secret garage-flow-bootstrap-admin
+```
+
+O seed de demonstração não é executado no Kubernetes.
+
+### 6. Subir a API
+
+```bash
+kubectl apply -f k8s/service.yaml
+kubectl apply -f k8s/deployment.yaml
+
+kubectl rollout status \
+  deployment/garage-flow-deployment \
+  --timeout=180s
+```
+
+Verifique os recursos e os logs:
+
+```bash
+kubectl get pods,services,pvc
+kubectl logs -f deployment/garage-flow-deployment
+```
+
+### 7. Aplicar o Ingress
+
+Com o NGINX Ingress Controller instalado:
+
+```bash
+kubectl apply -f k8s/ingress.yaml
+kubectl get ingress
+```
+
+### 8. Acessar a API
+
+Como o Service da API é do tipo `ClusterIP`, utilize port-forward para o acesso local:
+
+```bash
+kubectl port-forward \
+  service/garage-flow-service \
+  3000:80
+```
+
+Acessos:
+
+- **API:** `http://localhost:3000`
+- **Swagger:** `http://localhost:3000/docs`
+- **Liveness:** `http://localhost:3000/health`
+- **Readiness:** `http://localhost:3000/ready`
+
+### 9. Aplicar o HPA
+
+O HPA mantém entre 1 e 5 réplicas da API. Uma nova réplica pode ser criada quando a utilização média alcançar `60%` de CPU.
+
+Quando a demanda diminui, o HPA aguarda uma janela de estabilização de 60 segundos e reduz, no máximo, 50% das réplicas a cada 30 segundos.
+
+Com o Metrics Server disponível:
+
+```bash
+kubectl apply -f k8s/hpa.yaml
+kubectl get hpa
+kubectl top pods
+```
+
+Se as métricas aparecerem como `<unknown>`, verifique se o Metrics Server está instalado e funcionando no cluster.
+
+### 10. Executar o teste de carga com k6
+
+O arquivo `k6/load-test.js` aumenta gradualmente a carga para 50 e depois 500 usuários virtuais, antes de reduzi-la a zero, enviando requisições para o endpoint `GET /health`. Por padrão, o teste utiliza a URL `http://localhost:3000`, disponibilizada pelo port-forward da etapa 8.
+
+O teste falha se a taxa de requisições com erro atingir 1% ou se 95% das requisições não forem concluídas em menos de 500 ms.
+
+No terminal, acompanhe o HPA e os Pods:
+
+```bash
+kubectl get hpa -w
+```
+
+Execute o teste:
+
+```bash
+k6 run k6/load-test.js
+```
+
+Para executar contra outro endereço, informe a variável de ambiente `BASE_URL`:
+
+```bash
+BASE_URL=http://localhost:3000 k6 run k6/load-test.js
+```
+
+Ao final, o k6 apresenta métricas como quantidade de requisições, latência, throughput e taxa de falhas. Durante a execução, o HPA pode ser acompanhado para verificar o aumento e a redução do número de réplicas da API.
+
+### 11. Remover o ambiente
+
+```bash
+kubectl delete -f k8s/ --ignore-not-found
+```
+
+Esse comando também remove o PVC e, consequentemente, os dados locais armazenados pelo PostgreSQL.
+
 ## Como usar e testar a API
 
-### 1. Login e usuários disponíveis
+### 1. Login
 
-O seed já popula o banco com clientes, veículos, serviços, peças e ordens de serviço em todos os estágios do fluxo - não é necessário cadastrar nada manualmente para testar a API.
+#### Produção com Kubernetes
 
-Para autenticar, use `POST /auth/login` com um dos usuários abaixo (senha padrão `Password123!` para todos):
+O Kubernetes não executa o seed de demonstração. O Job `garage-flow-migration` aplica as migrations, e o Job `garage-flow-bootstrap-admin` cria somente o primeiro administrador com as credenciais configuradas em `k8s/admin-secret.yaml`.
+
+Depois de executar o bootstrap, autentique esse administrador por meio de `POST /auth/login`. Com o token recebido, ele poderá cadastrar os demais usuários pela rota protegida `POST /auth/users`.
+
+#### Desenvolvimento com Docker Compose
+
+Ao iniciar o ambiente com `docker-compose.development.yaml`, o seed é executado automaticamente e popula o banco com clientes, veículos, serviços, peças e ordens de serviço em diferentes estágios do fluxo. As credenciais apresentadas abaixo existem somente nesse ambiente de desenvolvimento.
+
+Para autenticar durante o desenvolvimento, use `POST /auth/login` com um dos usuários abaixo (senha padrão `Password123!` para todos):
 
 | E-mail                 | Role            |
 | ---------------------- | --------------- |
