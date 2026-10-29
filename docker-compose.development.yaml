@@ -19,6 +19,12 @@ services:
       timeout: 5s
       retries: 5
 
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - '1025:1025' # SMTP (a API envia por aqui)
+      - '8025:8025' # interface web (caixa de entrada)
+
   api:
     build:
       context: .
@@ -35,6 +41,9 @@ services:
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
       TRACKING_TOKEN_SECRET: ${TRACKING_TOKEN_SECRET}
       BUDGET_WEBHOOK_SECRET: ${BUDGET_WEBHOOK_SECRET}
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_FROM: 'Garage Flow <no-reply@garageflow.local>'
     volumes:
       - .:/app
       - /app/node_modules
@@ -45,6 +54,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      mailpit:
+        condition: service_started
     command: >
       sh -c "rm -rf /app/dist /app/tsconfig.tsbuildinfo &&
       npx prisma generate &&
