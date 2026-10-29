@@ -24,6 +24,9 @@ export class SmtpNotificationGateway implements NotificationGateway {
       host: process.env.SMTP_HOST ?? 'localhost',
       port,
       secure: port === 465,
+      connectionTimeout: 5000,
+      greetingTimeout: 5000,
+      socketTimeout: 10000,
       auth: user ? { user, pass: process.env.SMTP_PASS } : undefined,
     });
     this.from = process.env.SMTP_FROM ?? 'Garage Flow <no-reply@garageflow.local>';

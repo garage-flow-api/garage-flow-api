@@ -6,6 +6,7 @@ import { ServiceItem } from '@service-orders/domain/entities/service-item.entity
 import { type ServiceOrderRepository } from '@service-orders/domain/repositories/service-order.repository';
 import { type BuildServiceOrderItemsUseCase } from '@service-orders/application/use-cases/build-service-order-items.use-case';
 import { type CalculateTotalAmountUseCase } from '@service-orders/application/use-cases/calculate-total-amount.use-case';
+import { type NotifyServiceOrderStatusChangeUseCase } from '@service-orders/application/use-cases/notify-service-order-status-change.use-case';
 import {
   CreateServiceOrderUseCase,
   type OpenServiceOrderInput,
@@ -18,6 +19,7 @@ describe('CreateServiceOrderUseCase', () => {
   let ensureVehicle: { execute: jest.Mock };
   let buildItems: { execute: jest.Mock };
   let calculateTotal: { execute: jest.Mock };
+  let notifyStatusChange: { execute: jest.Mock };
   let useCase: CreateServiceOrderUseCase;
   let calls: string[];
 
@@ -52,6 +54,12 @@ describe('CreateServiceOrderUseCase', () => {
       }),
     };
     calculateTotal = { execute: jest.fn().mockResolvedValue(100) };
+    notifyStatusChange = {
+      execute: jest.fn(() => {
+        calls.push('notify');
+        return Promise.resolve();
+      }),
+    };
 
     useCase = new CreateServiceOrderUseCase(
       repository as unknown as ServiceOrderRepository,
@@ -60,6 +68,7 @@ describe('CreateServiceOrderUseCase', () => {
       ensureVehicle as unknown as EnsureVehicleUseCase,
       buildItems as unknown as BuildServiceOrderItemsUseCase,
       calculateTotal as unknown as CalculateTotalAmountUseCase,
+      notifyStatusChange as unknown as NotifyServiceOrderStatusChangeUseCase,
     );
   });
 
@@ -78,17 +87,24 @@ describe('CreateServiceOrderUseCase', () => {
     expect(repository.save).toHaveBeenCalledWith(serviceOrder);
   });
 
-  it('monta e valida os itens antes de abrir a transação', async () => {
+  it('monta e valida os itens antes de abrir a transação e notifica só depois de gravar', async () => {
     await useCase.execute(input);
 
     expect(buildItems.execute).toHaveBeenCalledWith({
       services: input.services,
       parts: input.parts,
     });
-    expect(calls).toEqual(['transaction', 'save']);
+    expect(calls).toEqual(['transaction', 'save', 'notify']);
     expect(buildItems.execute.mock.invocationCallOrder[0]).toBeLessThan(
       transactionRunner.run.mock.invocationCallOrder[0],
     );
+  });
+
+  it('notifica o cliente com a OS criada', async () => {
+    const serviceOrder = await useCase.execute(input);
+
+    expect(notifyStatusChange.execute).toHaveBeenCalledTimes(1);
+    expect(notifyStatusChange.execute).toHaveBeenCalledWith(serviceOrder);
   });
 
   it('não abre transação nem grava nada se um item for inválido', async () => {
@@ -98,15 +114,17 @@ describe('CreateServiceOrderUseCase', () => {
     expect(transactionRunner.run).not.toHaveBeenCalled();
     expect(ensureClient.execute).not.toHaveBeenCalled();
     expect(repository.save).not.toHaveBeenCalled();
+    expect(notifyStatusChange.execute).not.toHaveBeenCalled();
   });
 
-  it('propaga o erro do veículo e não salva a OS', async () => {
+  it('propaga o erro do veículo, não salva a OS e não notifica', async () => {
     ensureVehicle.execute.mockRejectedValue(
       new BusinessRuleError('Vehicle does not belong to the informed client'),
     );
 
     await expect(useCase.execute(input)).rejects.toThrow(BusinessRuleError);
     expect(repository.save).not.toHaveBeenCalled();
+    expect(notifyStatusChange.execute).not.toHaveBeenCalled();
   });
 
   it('propaga o erro quando uma peça não existe', async () => {
@@ -114,6 +132,7 @@ describe('CreateServiceOrderUseCase', () => {
 
     await expect(useCase.execute(input)).rejects.toThrow(NotFoundError);
     expect(transactionRunner.run).not.toHaveBeenCalled();
+    expect(notifyStatusChange.execute).not.toHaveBeenCalled();
   });
 
   it('abre a OS sem serviços nem peças quando eles não são informados', async () => {

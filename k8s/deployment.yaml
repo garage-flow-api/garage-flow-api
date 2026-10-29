@@ -22,11 +22,11 @@ spec:
 
           resources:
             requests:
-              memory: "256Mi"
-              cpu: "250m"
+              memory: '256Mi'
+              cpu: '250m'
             limits:
-              memory: "512Mi"
-              cpu: "500m"
+              memory: '512Mi'
+              cpu: '500m'
 
           livenessProbe:
             httpGet:
@@ -72,3 +72,38 @@ spec:
                 secretKeyRef:
                   name: garage-flow-secrets
                   key: TRACKING_TOKEN_SECRET
+            - name: BUDGET_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: garage-flow-secrets
+                  key: BUDGET_WEBHOOK_SECRET
+            - name: SMTP_USER
+              valueFrom:
+                secretKeyRef:
+                  name: garage-flow-secrets
+                  key: SMTP_USER
+            - name: SMTP_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: garage-flow-secrets
+                  key: SMTP_PASS
+            - name: PUBLIC_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: garage-flow-config
+                  key: PUBLIC_BASE_URL
+            - name: SMTP_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: garage-flow-config
+                  key: SMTP_HOST
+            - name: SMTP_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: garage-flow-config
+                  key: SMTP_PORT
+            - name: SMTP_FROM
+              valueFrom:
+                configMapKeyRef:
+                  name: garage-flow-config
+                  key: SMTP_FROM

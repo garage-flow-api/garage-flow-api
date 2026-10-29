@@ -75,6 +75,7 @@ garage-flow-api/
 │   │   ├── auth/
 │   │   ├── client/
 │   │   ├── inventory/
+│   │   ├── notification/
 │   │   ├── service/
 │   │   ├── service-orders/
 │   │   └── vehicle/
@@ -98,15 +99,16 @@ garage-flow-api/
 - **Service:** serviços padronizados da oficina, como troca de óleo, alinhamento etc., com preço/tabela de mão de obra.
 - **Inventory:** peças e insumos utilizados nas ordens de serviço, com controle de estoque físico e lógico. O estoque lógico desconta do físico tudo que já está comprometido com ordens de serviço em aberto, evitando que a mesma peça seja reservada duas vezes. Peças com estoque lógico abaixo do mínimo configurado são sinalizadas automaticamente.
 - **Service Orders:** ciclo de vida da ordem de serviço, incluindo recebimento, diagnóstico, adição de serviços/peças, orçamento, aprovação, execução, finalização e entrega. Ao finalizar uma OS, as peças utilizadas são baixadas definitivamente do estoque. Cada OS gera um link público de rastreamento, que permite ao cliente consultar o status sem autenticação.
+- **Notification:** envio de e-mails ao cliente por meio de uma porta (`NotificationGateway`) com adaptador SMTP (Nodemailer). Avisa as mudanças de status da OS e envia o orçamento com links para aprovar ou recusar. Em desenvolvimento, os e-mails são capturados pelo Mailpit.
 
 Além dos contextos de negócio, `common` contém elementos compartilhados pela aplicação (guards, filtros de exceção, pipes, decorators e erros de domínio) e `infra` contém recursos de infraestrutura que não pertencem a um contexto específico (conexão com o banco, health check).
 
 ## Ambientes de execução
 
-| Ambiente | Forma de execução | Configuração |
-| --- | --- | --- |
-| Desenvolvimento | Docker Compose | `docker-compose.development.yaml` e `.env` |
-| Produção | Kubernetes | Manifestos da pasta `k8s/` |
+| Ambiente        | Forma de execução | Configuração                               |
+| --------------- | ----------------- | ------------------------------------------ |
+| Desenvolvimento | Docker Compose    | `docker-compose.development.yaml` e `.env` |
+| Produção        | Kubernetes        | Manifestos da pasta `k8s/`                 |
 
 Não existe um Docker Compose de produção. O estágio `production` do `Dockerfile` gera a imagem enxuta utilizada pelo Deployment da API no Kubernetes.
 
@@ -132,7 +134,19 @@ JWT_EXPIRES_IN=1d
 
 # Link público de rastreamento da OS
 TRACKING_TOKEN_SECRET=troque-por-outro-segredo-forte
+
+# URL pública da API, usada nos links enviados por e-mail (acompanhamento e orçamento)
+PUBLIC_BASE_URL=http://localhost:3000
+
+# E-mail (SMTP). Em desenvolvimento, o Mailpit recebe tudo, sem enviar de verdade
+SMTP_HOST=localhost
+SMTP_PORT=1025
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM="Garage Flow <no-reply@garageflow.local>"
 ```
+
+> No Docker Compose, a API usa `SMTP_HOST=mailpit` (nome do serviço), definido no próprio `docker-compose.development.yaml`. `PUBLIC_BASE_URL` deve apontar para o endereço pelo qual o cliente alcança a API, pois é dele que saem os links dos e-mails.
 
 O arquivo `.env` é utilizado pelo Docker Compose e pelos comandos executados localmente. No ambiente de produção, as configurações são fornecidas pelos recursos `ConfigMap` e `Secret` do Kubernetes.
 
@@ -149,6 +163,7 @@ O Docker Compose inicia:
 - PostgreSQL (dados da aplicação);
 - PostgreSQL do SonarQube (`sonar-db`) e o próprio SonarQube (análise de código);
 - API NestJS;
+- Mailpit (servidor SMTP de testes, captura os e-mails enviados pela API);
 - aplicação das migrations e do seed do Prisma.
 
 A API aguarda o PostgreSQL ficar saudável, gera o Prisma Client, executa as migrations e popula o banco com os dados de demonstração antes de iniciar. Os usuários criados pelo seed usam a senha padrão `Password123!`.
@@ -158,6 +173,7 @@ A API aguarda o PostgreSQL ficar saudável, gera o Prisma Client, executa as mig
 - **API:** `http://localhost:3000`
 - **Swagger:** `http://localhost:3000/docs`
 - **SonarQube:** `http://localhost:9000` (usuário/senha padrão `admin`/`admin` no primeiro acesso) - disponível apenas ao subir com `docker-compose.development.yaml`.
+- **Mailpit (caixa de entrada de teste):** `http://localhost:8025`. Todos os e-mails enviados pela API em desenvolvimento aparecem aqui.
 
 ### Prisma Studio
 
@@ -221,20 +237,20 @@ garage-flow-deployment
 
 ### Recursos provisionados
 
-| Manifesto | Recurso criado |
-| --- | --- |
-| `k8s/configmap.yaml` | Variáveis não sensíveis da API |
-| `k8s/secret.yaml` | Credenciais do banco e segredos da aplicação |
-| `k8s/postgres-pvc.yaml` | Volume persistente de 1 GiB para o PostgreSQL |
-| `k8s/postgres-deployment.yaml` | Deployment do PostgreSQL 16 |
-| `k8s/postgres-service.yaml` | Service interno do PostgreSQL |
-| `k8s/migration-job.yaml` | Job responsável por executar `prisma migrate deploy` |
-| `k8s/admin-secret.yaml` | Credenciais temporárias do primeiro administrador |
-| `k8s/bootstrap-admin-job.yaml` | Job que cria o primeiro usuário `ADMIN` |
-| `k8s/deployment.yaml` | Deployment da API com recursos, liveness e readiness probes |
-| `k8s/service.yaml` | Service interno da API |
-| `k8s/hpa.yaml` | Escalabilidade automática por CPU e memória |
-| `k8s/ingress.yaml` | Roteamento HTTP por meio de NGINX Ingress |
+| Manifesto                      | Recurso criado                                              |
+| ------------------------------ | ----------------------------------------------------------- |
+| `k8s/configmap.yaml`           | Variáveis não sensíveis da API                              |
+| `k8s/secret.yaml`              | Credenciais do banco e segredos da aplicação                |
+| `k8s/postgres-pvc.yaml`        | Volume persistente de 1 GiB para o PostgreSQL               |
+| `k8s/postgres-deployment.yaml` | Deployment do PostgreSQL 16                                 |
+| `k8s/postgres-service.yaml`    | Service interno do PostgreSQL                               |
+| `k8s/migration-job.yaml`       | Job responsável por executar `prisma migrate deploy`        |
+| `k8s/admin-secret.yaml`        | Credenciais temporárias do primeiro administrador           |
+| `k8s/bootstrap-admin-job.yaml` | Job que cria o primeiro usuário `ADMIN`                     |
+| `k8s/deployment.yaml`          | Deployment da API com recursos, liveness e readiness probes |
+| `k8s/service.yaml`             | Service interno da API                                      |
+| `k8s/hpa.yaml`                 | Escalabilidade automática por CPU e memória                 |
+| `k8s/ingress.yaml`             | Roteamento HTTP por meio de NGINX Ingress                   |
 
 > Os valores presentes em `k8s/secret.yaml` e `k8s/admin-secret.yaml` são destinados somente ao ambiente local de demonstração. Em uma produção real, utilize um gerenciador de segredos da cloud e não versione credenciais reais no repositório.
 
@@ -481,14 +497,14 @@ flowchart LR
 
 ### Jobs
 
-| Job | Quando roda | O que faz |
-| --- | --- | --- |
-| `ci` | PR, push na `main` e "Run workflow" do `ci-cd` | `npm ci`, Prisma generate, lint, Prettier, build e testes com cobertura (artefato `coverage`) |
-| `validate-infra` | PR, push na `main` e "Run workflow" do `ci-cd`, em paralelo ao `ci` | `terraform fmt` e `validate` em `infra/azure` (sem acessar a Azure) e `kubectl kustomize` na base `k8s/` e nos overlays. Se falhar, o deploy não roda |
-| `image` | Depois do `ci` | Builda a imagem da API e a dos Jobs e roda o Trivy (`CRITICAL`/`HIGH`) nas duas: bloqueante na da API e informativo na dos Jobs. Na `main` (push ou disparo manual), publica as duas no ACR, com o SHA curto do commit como tag |
-| `deploy` | Depois do `image`, só se as imagens foram publicadas | Jobs de migration e de criação do primeiro admin, overlay `cloud` (API, Service, Ingress, HPA), rollout e checagem de `/health` e `/ready`. As URLs aparecem no resumo da execução |
-| `provision` | Só pelo "Run workflow" do `infra` | `terraform plan` + `apply` em `infra/azure`: AKS, ACR, PostgreSQL, Key Vault e Ingress (~15-20 min) |
-| `destroy` | Só pelo "Run workflow" do `infra` | Remove a aplicação do cluster, o Ingress e o restante da infra com `terraform destroy` (~10-15 min) |
+| Job              | Quando roda                                                         | O que faz                                                                                                                                                                                                                       |
+| ---------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci`             | PR, push na `main` e "Run workflow" do `ci-cd`                      | `npm ci`, Prisma generate, lint, Prettier, build e testes com cobertura (artefato `coverage`)                                                                                                                                   |
+| `validate-infra` | PR, push na `main` e "Run workflow" do `ci-cd`, em paralelo ao `ci` | `terraform fmt` e `validate` em `infra/azure` (sem acessar a Azure) e `kubectl kustomize` na base `k8s/` e nos overlays. Se falhar, o deploy não roda                                                                           |
+| `image`          | Depois do `ci`                                                      | Builda a imagem da API e a dos Jobs e roda o Trivy (`CRITICAL`/`HIGH`) nas duas: bloqueante na da API e informativo na dos Jobs. Na `main` (push ou disparo manual), publica as duas no ACR, com o SHA curto do commit como tag |
+| `deploy`         | Depois do `image`, só se as imagens foram publicadas                | Jobs de migration e de criação do primeiro admin, overlay `cloud` (API, Service, Ingress, HPA), rollout e checagem de `/health` e `/ready`. As URLs aparecem no resumo da execução                                              |
+| `provision`      | Só pelo "Run workflow" do `infra`                                   | `terraform plan` + `apply` em `infra/azure`: AKS, ACR, PostgreSQL, Key Vault e Ingress (~15-20 min)                                                                                                                             |
+| `destroy`        | Só pelo "Run workflow" do `infra`                                   | Remove a aplicação do cluster, o Ingress e o restante da infra com `terraform destroy` (~10-15 min)                                                                                                                             |
 
 Nada cria ou destrói infraestrutura automaticamente. Em push na `main`, a pipeline só **lê** o state do Terraform: se a infra não existir, as imagens não são publicadas e o deploy é pulado, sem falhar. As mesmas verificações do Husky (Prettier, ESLint e testes) são repetidas no job `ci`.
 
@@ -558,7 +574,7 @@ A resposta traz um `access_token` (JWT), que deve ser enviado no header `Authori
 | **MECHANIC**        | Iniciar diagnóstico, adicionar serviços/peças à OS, iniciar e finalizar a execução do serviço           |
 | **STOCK_CLERK**     | Cadastrar, reabastecer e dar baixa manual em peças; consultar peças com estoque abaixo do mínimo        |
 
-> Consultas de leitura (`GET`) na maioria dos recursos estão disponíveis para qualquer usuário autenticado, independente da role. As exceções (ex.: `GET /inventory/low-stock`) exigem a role MECHANIC. `GET /service-orders/track/:token` e `POST /auth/login` são as únicas rotas públicas, sem necessidade de autenticação.
+> Consultas de leitura (`GET`) na maioria dos recursos estão disponíveis para qualquer usuário autenticado, independente da role. As exceções (ex.: `GET /inventory/low-stock`) exigem a role MECHANIC. `GET /service-orders/track/:token`, `POST /auth/login` e `/budget-decisions/:token` (links dos e-mails de orçamento) são as únicas rotas públicas, sem necessidade de autenticação.
 
 ### 2. Clientes
 
@@ -684,8 +700,6 @@ GET /service-orders/metrics/average-execution-time   # tempo médio de execuçã
 DELETE /service-orders/:id                           # soft delete da OS
 ```
 
-
-
 - **`GET /track/:token`**: consulta pública de status via o token do link de rastreamento, sem necessidade de autenticação.
 - **`GET /metrics/average-execution-time`** (qualquer usuário autenticado): calcula o tempo médio de execução das ordens de serviço com status `FINISHED` ou `DELIVERED`. Aceita filtro opcional por período via query params `from` e `to` (formato `AAAA-MM-DD`); sem os filtros, considera todas as OS concluídas. Retorna:
 
@@ -702,6 +716,33 @@ DELETE /service-orders/:id                           # soft delete da OS
   ```bash
   GET /service-orders/metrics/average-execution-time?from=2026-08-01&to=2026-08-31
   ```
+
+### 8. Avisos por e-mail
+
+Quando o status de uma OS muda, o cliente recebe um e-mail com o status atual (no mesmo vocabulário da consulta pública) e o link de acompanhamento. O envio acontece depois que a OS é gravada e **nunca** impede a operação: se o envio falhar, o erro é registrado no log e a OS segue normalmente. Clientes sem e-mail cadastrado são ignorados.
+
+| Evento                                                                            | E-mail enviado                                                |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Abertura da OS                                                                    | Status "Recebida" + link de acompanhamento                    |
+| Início do diagnóstico, aprovação, cancelamento, início e fim da execução, entrega | Status atualizado + link de acompanhamento                    |
+| Geração do orçamento (`AWAITING_APPROVAL`)                                        | Orçamento com itens, total e botões **Aprovar** e **Recusar** |
+
+O e-mail de orçamento traz dois links assinados (HMAC-SHA256, validade de 7 dias, derivados do `TRACKING_TOKEN_SECRET` com um rótulo próprio, de modo que o token do link de acompanhamento não serve para decidir). O fluxo é:
+
+1. `GET /budget-decisions/:token` mostra uma página de confirmação. Ele **não** registra nada, para que antivírus e leitores de e-mail que abrem links automaticamente não decidam pelo cliente.
+2. O botão da página envia `POST /budget-decisions/:token`, que registra a decisão pelo mesmo caso de uso do webhook de orçamento: aprovar leva a OS para `AWAITING_EXECUTION`, recusar a cancela.
+3. A primeira decisão vale. Repetir o link, ou usar o outro, mostra "Decisão já registrada".
+
+Essas rotas retornam HTML e não aparecem no Swagger.
+
+#### Testando localmente
+
+1. Suba o ambiente (`docker compose -f docker-compose.development.yaml up --build`).
+2. Abra uma OS informando `client.email` e confira o e-mail "Recebida" em `http://localhost:8025`.
+3. Percorra o ciclo (6.2 a 6.4). Ao gerar o orçamento, chega o e-mail com os botões.
+4. Clique em **Aprovar**, confirme na página e veja a OS em `AWAITING_EXECUTION` (e um novo e-mail de status).
+
+Em produção, aponte `SMTP_*` para um provedor real e `PUBLIC_BASE_URL` para o domínio público da API.
 
 ## Validações
 

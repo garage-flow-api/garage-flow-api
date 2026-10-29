@@ -21,6 +21,8 @@ services:
 
   mailpit:
     image: axllent/mailpit
+    container_name: garage-flow-mailpit
+    restart: unless-stopped
     ports:
       - '1025:1025' # SMTP (a API envia por aqui)
       - '8025:8025' # interface web (caixa de entrada)
@@ -41,6 +43,7 @@ services:
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
       TRACKING_TOKEN_SECRET: ${TRACKING_TOKEN_SECRET}
       BUDGET_WEBHOOK_SECRET: ${BUDGET_WEBHOOK_SECRET}
+      PUBLIC_BASE_URL: http://localhost:3000
       SMTP_HOST: mailpit
       SMTP_PORT: 1025
       SMTP_FROM: 'Garage Flow <no-reply@garageflow.local>'
