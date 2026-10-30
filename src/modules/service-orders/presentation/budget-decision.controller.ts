@@ -1,6 +1,5 @@
-// src/modules/service-orders/presentation/budget-decision.controller.ts
 import { Controller, Get, Header, HttpCode, Param, Post } from '@nestjs/common';
-import { ApiExcludeController } from '@nestjs/swagger';
+import { ApiOkResponse, ApiOperation, ApiParam, ApiProduces, ApiTags } from '@nestjs/swagger';
 
 import { BudgetDecision } from '@service-orders/domain/value-objects/budget-decision.vo';
 import { ProcessBudgetDecisionUseCase } from '@service-orders/application/use-cases/process-budget-decision.use-case';
@@ -28,7 +27,7 @@ button{font-size:1rem;padding:.75rem 1.5rem;border:0;border-radius:6px;backgroun
 
 const INVALID = page('Link inválido', 'Este link é inválido ou expirou. Fale com a oficina.');
 
-@ApiExcludeController()
+@ApiTags('Budget decisions')
 @Controller('budget-decisions')
 export class BudgetDecisionController {
   constructor(private readonly processBudgetDecision: ProcessBudgetDecisionUseCase) {}
@@ -37,6 +36,17 @@ export class BudgetDecisionController {
   @Header('Content-Type', 'text/html; charset=utf-8')
   @Header('Cache-Control', 'no-store')
   @HttpCode(200)
+  @ApiOperation({
+    summary: 'Shows the confirmation page of the approve/reject link sent by e-mail',
+    description:
+      'Does not change the service order: only the POST registers the decision. The token is signed (HMAC) and expires in 7 days.',
+  })
+  @ApiParam({ name: 'token', description: 'Signed token from the e-mail link' })
+  @ApiProduces('text/html')
+  @ApiOkResponse({
+    description: 'HTML page ("Link inválido" when the token is invalid or expired)',
+    content: { 'text/html': { schema: { type: 'string' } } },
+  })
   confirm(@Param('token') token: string): string {
     const payload = verifyBudgetDecisionToken(token);
     if (!payload) return INVALID;
@@ -52,6 +62,17 @@ export class BudgetDecisionController {
   @Header('Content-Type', 'text/html; charset=utf-8')
   @Header('Cache-Control', 'no-store')
   @HttpCode(200)
+  @ApiOperation({
+    summary: 'Registers the decision of the e-mail link (approve or reject)',
+    description:
+      'Reuses the budget decision flow of the webhook: the first decision wins; repeated or opposite decisions are ignored.',
+  })
+  @ApiParam({ name: 'token', description: 'Signed token from the e-mail link' })
+  @ApiProduces('text/html')
+  @ApiOkResponse({
+    description: 'HTML page with the result',
+    content: { 'text/html': { schema: { type: 'string' } } },
+  })
   async decide(@Param('token') token: string): Promise<string> {
     const payload = verifyBudgetDecisionToken(token);
     if (!payload) return INVALID;

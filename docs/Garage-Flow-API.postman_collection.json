@@ -1,0 +1,1968 @@
+{
+  "info": {
+    "name": "Garage Flow API",
+    "description": "Collection gerada do OpenAPI (/docs-json).\n\n1. Suba a API e rode a pasta \"00 - Autenticação\" (guarda um token por perfil).\n2. Rode \"01 - Fluxo da OS\" em ordem para percorrer o ciclo completo.\n3. As demais pastas cobrem todos os endpoints, por contexto.\n\nVariável `role` (admin, advisor, mechanic, stock) escolhe qual token vai no Authorization; padrão admin.\nWebhook: X-Signature = sha256=<HMAC-SHA256 do corpo bruto com BUDGET_WEBHOOK_SECRET>; o script calcula sozinho usando `webhookSecret`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{authToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const role = (pm.collectionVariables.get(\"role\") || \"admin\").toLowerCase();",
+          "const t = pm.collectionVariables.get(\"token_\" + role) || pm.collectionVariables.get(\"token\");",
+          "pm.variables.set(\"authToken\", t);"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "password",
+      "value": "Password123!"
+    },
+    {
+      "key": "adminEmail",
+      "value": "admin@example.com"
+    },
+    {
+      "key": "advisorEmail",
+      "value": "advisor@example.com"
+    },
+    {
+      "key": "mechanicEmail",
+      "value": "mechanic@example.com"
+    },
+    {
+      "key": "stockEmail",
+      "value": "stock@example.com"
+    },
+    {
+      "key": "role",
+      "value": "admin"
+    },
+    {
+      "key": "webhookSecret",
+      "value": "troque-por-um-segredo-do-webhook"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "token_admin",
+      "value": ""
+    },
+    {
+      "key": "token_advisor",
+      "value": ""
+    },
+    {
+      "key": "token_mechanic",
+      "value": ""
+    },
+    {
+      "key": "token_stock",
+      "value": ""
+    },
+    {
+      "key": "serviceOrderId",
+      "value": ""
+    },
+    {
+      "key": "serviceId",
+      "value": ""
+    },
+    {
+      "key": "partId",
+      "value": ""
+    },
+    {
+      "key": "clientId",
+      "value": ""
+    },
+    {
+      "key": "vehicleId",
+      "value": ""
+    },
+    {
+      "key": "userId",
+      "value": ""
+    },
+    {
+      "key": "userEmail",
+      "value": ""
+    },
+    {
+      "key": "id",
+      "value": ""
+    },
+    {
+      "key": "trackingToken",
+      "value": ""
+    },
+    {
+      "key": "decisionToken",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "00 - Autenticação",
+      "item": [
+        {
+          "name": "Login ADMIN",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"login ok\",()=>pm.expect(pm.response.code).to.be.oneOf([200,201]));",
+                  "const t=pm.response.json().access_token; pm.collectionVariables.set(\"token_admin\", t);",
+                  "pm.collectionVariables.set(\"token\", t);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Login SERVICE_ADVISOR",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"login ok\",()=>pm.expect(pm.response.code).to.be.oneOf([200,201]));",
+                  "const t=pm.response.json().access_token; pm.collectionVariables.set(\"token_advisor\", t);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{advisorEmail}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Login MECHANIC",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"login ok\",()=>pm.expect(pm.response.code).to.be.oneOf([200,201]));",
+                  "const t=pm.response.json().access_token; pm.collectionVariables.set(\"token_mechanic\", t);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{mechanicEmail}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Login STOCK_CLERK",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"login ok\",()=>pm.expect(pm.response.code).to.be.oneOf([200,201]));",
+                  "const t=pm.response.json().access_token; pm.collectionVariables.set(\"token_stock\", t);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{stockEmail}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 - Fluxo da OS",
+      "item": [
+        {
+          "name": "1. Cadastrar serviço no catálogo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 2xx\",()=>pm.expect(pm.response.code).to.be.within(200,299));",
+                  "try{const j=pm.response.json(); if(j&&j.id) pm.collectionVariables.set(\"serviceId\", j.id);}catch(e){}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/services",
+              "host": ["{{baseUrl}}"],
+              "path": ["services"]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Troca de óleo {{$timestamp}}\",\n  \"price\": 150\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "2. Cadastrar peça no estoque",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 2xx\",()=>pm.expect(pm.response.code).to.be.within(200,299));",
+                  "try{const j=pm.response.json(); if(j&&j.id) pm.collectionVariables.set(\"partId\", j.id);}catch(e){}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/inventory",
+              "host": ["{{baseUrl}}"],
+              "path": ["inventory"]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Óleo sintético 5W40 {{$timestamp}}\",\n  \"unitOfMeasure\": \"ML\",\n  \"unitPrice\": 59.9,\n  \"quantity\": 20,\n  \"minQuantity\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "3. Abrir OS (e-mail de recebimento)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"OS criada (201)\",()=>pm.response.to.have.status(201));",
+                  "const j=pm.response.json();",
+                  "pm.collectionVariables.set(\"serviceOrderId\", j.id);",
+                  "pm.collectionVariables.set(\"clientId\", j.clientId || pm.collectionVariables.get(\"clientId\"));",
+                  "pm.collectionVariables.set(\"vehicleId\", j.vehicleId);",
+                  "if(j.trackingLink){pm.collectionVariables.set(\"trackingToken\", j.trackingLink.split(\"/\").pop());}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders"]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"client\": {\n    \"cpfCnpj\": \"529.982.247-25\",\n    \"name\": \"João da Silva\",\n    \"phone\": \"11999998888\",\n    \"address\": \"Rua das Flores, 123 - São Paulo/SP\",\n    \"email\": \"joao@example.com\"\n  },\n  \"vehicle\": {\n    \"licensePlate\": \"ABC1D23\",\n    \"brand\": \"Fiat\",\n    \"model\": \"Uno\",\n    \"year\": 2020\n  },\n  \"description\": \"Barulho ao frear e vibração no volante\",\n  \"services\": [\n    {\n      \"serviceId\": \"{{serviceId}}\"\n    }\n  ],\n  \"parts\": [\n    {\n      \"inventoryId\": \"{{partId}}\",\n      \"quantity\": 1\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "4. Consultar status público (sem login)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"status 200\",()=>pm.response.to.have.status(200));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders/track/{{trackingToken}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders", "track", "{{trackingToken}}"]
+            },
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "5. Iniciar diagnóstico",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"status 200\",()=>pm.response.to.have.status(200));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/start-diagnosis",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders", "{{serviceOrderId}}", "start-diagnosis"]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "6. Adicionar serviços e peças",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"status 200\",()=>pm.response.to.have.status(200));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/add-services-and-parts",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders", "{{serviceOrderId}}", "add-services-and-parts"]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"services\": [\n    {\n      \"serviceId\": \"{{serviceId}}\"\n    }\n  ],\n  \"parts\": [\n    {\n      \"inventoryId\": \"{{partId}}\",\n      \"quantity\": 2\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "7. Gerar orçamento (e-mail com links de aprovar/recusar)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"status 200\",()=>pm.response.to.have.status(200));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/budget",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders", "{{serviceOrderId}}", "budget"]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "8a. Aprovar orçamento (staff)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"status 200\",()=>pm.response.to.have.status(200));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/approve-budget",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders", "{{serviceOrderId}}", "approve-budget"]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "8b. Webhook: decisão APPROVED (assinado)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Assina o corpo EXATO enviado: X-Signature = sha256=<HMAC-SHA256(body, BUDGET_WEBHOOK_SECRET)>",
+                  "const secret = pm.collectionVariables.get(\"webhookSecret\");",
+                  "const body = pm.variables.replaceIn(pm.request.body.raw);",
+                  "pm.request.body.update({mode:\"raw\", raw: body, options:{raw:{language:\"json\"}}});",
+                  "const hex = CryptoJS.HmacSHA256(body, secret).toString(CryptoJS.enc.Hex);",
+                  "pm.variables.set(\"webhookSignature\", \"sha256=\" + hex);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"status 200\",()=>pm.response.to.have.status(200));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Signature",
+                "value": "{{webhookSignature}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/budget-decision",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhooks", "budget-decision"]
+            },
+            "description": "Use no lugar do 8a. O script de pré-request calcula X-Signature com o segredo da variável webhookSecret (mesmo valor de BUDGET_WEBHOOK_SECRET da API).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceOrderId\": \"{{serviceOrderId}}\",\n  \"decision\": \"APPROVED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "8b. Webhook: decisão REJECTED (assinado)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Assina o corpo EXATO enviado: X-Signature = sha256=<HMAC-SHA256(body, BUDGET_WEBHOOK_SECRET)>",
+                  "const secret = pm.collectionVariables.get(\"webhookSecret\");",
+                  "const body = pm.variables.replaceIn(pm.request.body.raw);",
+                  "pm.request.body.update({mode:\"raw\", raw: body, options:{raw:{language:\"json\"}}});",
+                  "const hex = CryptoJS.HmacSHA256(body, secret).toString(CryptoJS.enc.Hex);",
+                  "pm.variables.set(\"webhookSignature\", \"sha256=\" + hex);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"status 200\",()=>pm.response.to.have.status(200));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Signature",
+                "value": "{{webhookSignature}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/budget-decision",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhooks", "budget-decision"]
+            },
+            "description": "Use no lugar do 8a. O script de pré-request calcula X-Signature com o segredo da variável webhookSecret (mesmo valor de BUDGET_WEBHOOK_SECRET da API).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceOrderId\": \"{{serviceOrderId}}\",\n  \"decision\": \"REJECTED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "8c. Link do e-mail: abrir confirmação (GET)",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/budget-decisions/{{decisionToken}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["budget-decisions", "{{decisionToken}}"]
+            },
+            "description": "Cole em decisionToken o token do link recebido no Mailpit (http://localhost:8025). O GET só mostra a confirmação, não altera a OS.",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "8d. Link do e-mail: confirmar decisão (POST)",
+          "event": [],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/budget-decisions/{{decisionToken}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["budget-decisions", "{{decisionToken}}"]
+            },
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "9. Iniciar execução",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"status 200\",()=>pm.response.to.have.status(200));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/start-service",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders", "{{serviceOrderId}}", "start-service"]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "10. Finalizar serviço (baixa o estoque)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"status 200\",()=>pm.response.to.have.status(200));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/finish-service",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders", "{{serviceOrderId}}", "finish-service"]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "11. Entregar",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"status 200\",()=>pm.response.to.have.status(200));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/deliver",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders", "{{serviceOrderId}}", "deliver"]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "12. Cancelar OS (alternativa)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"status 200\",()=>pm.response.to.have.status(200));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/cancel-service",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders", "{{serviceOrderId}}", "cancel-service"]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "13. Link de acompanhamento",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"status 200\",()=>pm.response.to.have.status(200));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/tracking-link",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders", "{{serviceOrderId}}", "tracking-link"]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "14. Listar OS abertas por prioridade",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders"]
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Monitoramento",
+      "item": [
+        {
+          "name": "GET /health",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Checks API liveness",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "GET /ready",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/ready",
+              "host": ["{{baseUrl}}"],
+              "path": ["ready"]
+            },
+            "description": "Checks API readiness including database availability",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Auth e usuários",
+      "item": [
+        {
+          "name": "POST /auth/users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 2xx\",()=>pm.expect(pm.response.code).to.be.within(200,299));",
+                  "try{const j=pm.response.json(); if(j&&j.id) pm.collectionVariables.set(\"userId\", j.id);}catch(e){}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try{pm.collectionVariables.set(\"userEmail\", pm.response.json().email);}catch(e){}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "users"]
+            },
+            "description": "Create a user",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"mecanico.{{$timestamp}}@example.com\",\n  \"password\": \"Password123!\",\n  \"role\": \"MECHANIC\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /auth/users",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/users?role=",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "users"],
+              "query": [
+                {
+                  "key": "role",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filter users by role. Use MECHANIC to populate mechanic selectors."
+                }
+              ]
+            },
+            "description": "List all users"
+          }
+        },
+        {
+          "name": "POST /auth/login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"login 200/201\",()=>pm.expect(pm.response.code).to.be.oneOf([200,201]));",
+                  "const t=pm.response.json().access_token; pm.collectionVariables.set(\"token_admin\", t);",
+                  "pm.collectionVariables.set(\"token\", t);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Login user and generate JWT token",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "GET /auth/users/{email}",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/users/{{userEmail}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "users", "{{userEmail}}"]
+            },
+            "description": "Get a user by email"
+          }
+        },
+        {
+          "name": "PATCH /auth/users/{id}",
+          "event": [],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/users/{{id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "users", "{{id}}"]
+            },
+            "description": "Update a user",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"admin@example.com\",\n  \"password\": \"Password123!\",\n  \"role\": \"MECHANIC\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "DELETE /auth/users/{id}",
+          "event": [],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/users/{{id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "users", "{{id}}"]
+            },
+            "description": "Soft delete a user"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Serviços (catálogo)",
+      "item": [
+        {
+          "name": "POST /services",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 2xx\",()=>pm.expect(pm.response.code).to.be.within(200,299));",
+                  "try{const j=pm.response.json(); if(j&&j.id) pm.collectionVariables.set(\"serviceId\", j.id);}catch(e){}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/services",
+              "host": ["{{baseUrl}}"],
+              "path": ["services"]
+            },
+            "description": "Creates a new service",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Troca de óleo {{$timestamp}}\",\n  \"price\": 150\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /services",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/services",
+              "host": ["{{baseUrl}}"],
+              "path": ["services"]
+            },
+            "description": "List all services"
+          }
+        },
+        {
+          "name": "GET /services/{id}",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/services/{{serviceId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["services", "{{serviceId}}"]
+            },
+            "description": "Fetch a service by ID"
+          }
+        },
+        {
+          "name": "PATCH /services/{id}",
+          "event": [],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/services/{{serviceId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["services", "{{serviceId}}"]
+            },
+            "description": "Updates a service by ID",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Troca de óleo\",\n  \"price\": 150\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "DELETE /services/{id}",
+          "event": [],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/services/{{serviceId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["services", "{{serviceId}}"]
+            },
+            "description": "Deletes a service by ID"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Estoque",
+      "item": [
+        {
+          "name": "POST /inventory",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 2xx\",()=>pm.expect(pm.response.code).to.be.within(200,299));",
+                  "try{const j=pm.response.json(); if(j&&j.id) pm.collectionVariables.set(\"partId\", j.id);}catch(e){}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/inventory",
+              "host": ["{{baseUrl}}"],
+              "path": ["inventory"]
+            },
+            "description": "Creates a new inventory item",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Óleo sintético 5W40\",\n  \"unitOfMeasure\": \"ML\",\n  \"unitPrice\": 59.9,\n  \"quantity\": 20,\n  \"minQuantity\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /inventory",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/inventory",
+              "host": ["{{baseUrl}}"],
+              "path": ["inventory"]
+            },
+            "description": "List all inventory items"
+          }
+        },
+        {
+          "name": "GET /inventory/low-stock",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/inventory/low-stock",
+              "host": ["{{baseUrl}}"],
+              "path": ["inventory", "low-stock"]
+            },
+            "description": "Lists inventory items whose logical stock is below the configured minimum\n\nLogical stock subtracts from the physical quantity everything already committed to service orders that are still open (RECEIVED, IN_DIAGNOSIS, AWAITING_APPROVAL, IN_EXECUTION)."
+          }
+        },
+        {
+          "name": "PATCH /inventory/{id}",
+          "event": [],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/inventory/{{partId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["inventory", "{{partId}}"]
+            },
+            "description": "Updates an inventory item by ID",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Óleo sintético 5W40\",\n  \"unitPrice\": 59.9,\n  \"minQuantity\": 15\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "DELETE /inventory/{id}",
+          "event": [],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/inventory/{{partId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["inventory", "{{partId}}"]
+            },
+            "description": "Deletes an inventory item by ID"
+          }
+        },
+        {
+          "name": "PATCH /inventory/{id}/restock",
+          "event": [],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/inventory/{{partId}}/restock",
+              "host": ["{{baseUrl}}"],
+              "path": ["inventory", "{{partId}}", "restock"]
+            },
+            "description": "Adds quantity to an inventory item",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "PATCH /inventory/{id}/consume",
+          "event": [],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/inventory/{{partId}}/consume",
+              "host": ["{{baseUrl}}"],
+              "path": ["inventory", "{{partId}}", "consume"]
+            },
+            "description": "Consumes quantity from an inventory item",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Clientes",
+      "item": [
+        {
+          "name": "POST /clients",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 2xx\",()=>pm.expect(pm.response.code).to.be.within(200,299));",
+                  "try{const j=pm.response.json(); if(j&&j.id) pm.collectionVariables.set(\"clientId\", j.id);}catch(e){}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/clients",
+              "host": ["{{baseUrl}}"],
+              "path": ["clients"]
+            },
+            "description": "Creates a new client",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cpfCnpj\": \"529.982.247-25\",\n  \"name\": \"João da Silva\",\n  \"phone\": \"11999998888\",\n  \"address\": \"Rua das Flores, 123 - São Paulo/SP\",\n  \"email\": \"joao@email.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /clients",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/clients",
+              "host": ["{{baseUrl}}"],
+              "path": ["clients"]
+            },
+            "description": "List all clients"
+          }
+        },
+        {
+          "name": "GET /clients/{id}",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/clients/{{clientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["clients", "{{clientId}}"]
+            },
+            "description": "Fetch a client by ID"
+          }
+        },
+        {
+          "name": "PATCH /clients/{id}",
+          "event": [],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/clients/{{clientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["clients", "{{clientId}}"]
+            },
+            "description": "Updates a client by ID",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"João da Silva\",\n  \"phone\": \"11999998888\",\n  \"address\": \"Rua das Flores, 123 - São Paulo/SP\",\n  \"email\": \"joao@email.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "DELETE /clients/{id}",
+          "event": [],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/clients/{{clientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["clients", "{{clientId}}"]
+            },
+            "description": "Deletes a client by ID"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Veículos",
+      "item": [
+        {
+          "name": "POST /vehicles",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 2xx\",()=>pm.expect(pm.response.code).to.be.within(200,299));",
+                  "try{const j=pm.response.json(); if(j&&j.id) pm.collectionVariables.set(\"vehicleId\", j.id);}catch(e){}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vehicles",
+              "host": ["{{baseUrl}}"],
+              "path": ["vehicles"]
+            },
+            "description": "Creates a new vehicle",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brand\": \"Volkswagen\",\n  \"model\": \"Gol\",\n  \"licensePlate\": \"ABC1D23\",\n  \"year\": 2020,\n  \"clientId\": \"123e4567-e89b-12d3-a456-426614174000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /vehicles",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/vehicles",
+              "host": ["{{baseUrl}}"],
+              "path": ["vehicles"]
+            },
+            "description": "List all vehicles"
+          }
+        },
+        {
+          "name": "GET /vehicles/{id}",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/vehicles/{{vehicleId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["vehicles", "{{vehicleId}}"]
+            },
+            "description": "Fetch a vehicle by ID"
+          }
+        },
+        {
+          "name": "PATCH /vehicles/{id}",
+          "event": [],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vehicles/{{vehicleId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["vehicles", "{{vehicleId}}"]
+            },
+            "description": "Updates a vehicle by ID",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brand\": \"Volkswagen\",\n  \"model\": \"Gol\",\n  \"year\": 2020\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "DELETE /vehicles/{id}",
+          "event": [],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/vehicles/{{vehicleId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["vehicles", "{{vehicleId}}"]
+            },
+            "description": "Deletes a vehicle by ID"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Ordens de serviço",
+      "item": [
+        {
+          "name": "GET /service-orders/metrics/average-execution-time",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders/metrics/average-execution-time?from=&to=",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders", "metrics", "average-execution-time"],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Start date (inclusive), format YYYY-MM-DD"
+                },
+                {
+                  "key": "to",
+                  "value": "",
+                  "disabled": true,
+                  "description": "End date (exclusive), format YYYY-MM-DD"
+                }
+              ]
+            },
+            "description": "Returns the average execution time of completed service orders\n\nReturns the average execution time of completed service orders. The FROM and TO date filters are optional; when omitted, all FINISHED and DELIVERED service orders are considered."
+          }
+        },
+        {
+          "name": "POST /service-orders",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"OS criada (201)\",()=>pm.response.to.have.status(201));",
+                  "const j=pm.response.json();",
+                  "pm.collectionVariables.set(\"serviceOrderId\", j.id);",
+                  "pm.collectionVariables.set(\"clientId\", j.clientId || pm.collectionVariables.get(\"clientId\"));",
+                  "pm.collectionVariables.set(\"vehicleId\", j.vehicleId);",
+                  "if(j.trackingLink){pm.collectionVariables.set(\"trackingToken\", j.trackingLink.split(\"/\").pop());}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders"]
+            },
+            "description": "Opens a service order in a single request\n\nReuses the client (by CPF/CNPJ) and the vehicle (by license plate), creating them when they do not exist yet. Services and parts are optional. Everything is saved in one transaction: if any step fails, nothing is persisted.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"client\": {\n    \"cpfCnpj\": \"529.982.247-25\",\n    \"name\": \"João da Silva\",\n    \"phone\": \"11999998888\",\n    \"address\": \"Rua das Flores, 123 - São Paulo/SP\",\n    \"email\": \"joao@example.com\"\n  },\n  \"vehicle\": {\n    \"licensePlate\": \"ABC1D23\",\n    \"brand\": \"Fiat\",\n    \"model\": \"Uno\",\n    \"year\": 2020\n  },\n  \"description\": \"Barulho ao frear e vibração no volante\",\n  \"services\": [\n    {\n      \"serviceId\": \"{{serviceId}}\"\n    }\n  ],\n  \"parts\": [\n    {\n      \"inventoryId\": \"{{partId}}\",\n      \"quantity\": 1\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /service-orders",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders?status=&mechanicId=",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Returns only orders in this status, including FINISHED, DELIVERED and CANCELED. Use RECEIVED to list only orders available for diagnosis."
+                },
+                {
+                  "key": "mechanicId",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filter service orders assigned to a specific mechanic."
+                }
+              ]
+            },
+            "description": "Retrieves the service orders in priority order\n\nWithout the status filter, returns only open service orders (FINISHED, DELIVERED and CANCELED are hidden), ordered by status priority (in execution, awaiting approval, in diagnosis, received) and then oldest first. With the status filter, returns the service orders in that status, oldest first."
+          }
+        },
+        {
+          "name": "GET /service-orders/track/{token}",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders/track/{{trackingToken}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders", "track", "{{trackingToken}}"]
+            },
+            "description": "Publicly retrieves the current status and last update date of a service order",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "GET /service-orders/{id}",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders", "{{serviceOrderId}}"]
+            },
+            "description": "Retrieves a service order by ID\n\nThe status is returned in the client-facing terms: Recebida, Diagnóstico, Aguardando aprovação, Execução, Finalizada, Entregue or Cancelada."
+          }
+        },
+        {
+          "name": "PATCH /service-orders/{id}",
+          "event": [],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders", "{{serviceOrderId}}"]
+            },
+            "description": "Updates a service order by ID",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vehicleId\": \"uuid-do-veiculo\",\n  \"mechanicId\": \"uuid-do-mecanico\",\n  \"approvedAt\": \"2026-08-22T10:00:00.000Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "DELETE /service-orders/{id}",
+          "event": [],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders", "{{serviceOrderId}}"]
+            },
+            "description": "Soft deletes a service order by ID"
+          }
+        },
+        {
+          "name": "GET /service-orders/{id}/tracking-link",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/tracking-link",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders", "{{serviceOrderId}}", "tracking-link"]
+            },
+            "description": "Retrieves the public tracking link to share with the client"
+          }
+        },
+        {
+          "name": "PATCH /service-orders/{id}/budget",
+          "event": [],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/budget",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders", "{{serviceOrderId}}", "budget"]
+            },
+            "description": "Generates or retrieves the service order budget\n\nUse this PATCH to generate the budget when the service order is in FINISHED_DIAGNOSIS, which changes its status to AWAITING_APPROVAL. For any later status, the endpoint retrieves the budget without changing the status. Service orders in RECEIVED or IN_DIAGNOSIS cannot access a budget because items have not been added yet."
+          }
+        },
+        {
+          "name": "PATCH /service-orders/{id}/start-diagnosis",
+          "event": [],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/start-diagnosis",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders", "{{serviceOrderId}}", "start-diagnosis"]
+            },
+            "description": "Starts the diagnosis for a service order by ID\n\nThe selected service order must have RECEIVED status. The mechanic ID is taken from the authenticated user."
+          }
+        },
+        {
+          "name": "PATCH /service-orders/{id}/add-services-and-parts",
+          "event": [],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/add-services-and-parts",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders", "{{serviceOrderId}}", "add-services-and-parts"]
+            },
+            "description": "Adds services and parts to a service order and finishes the diagnosis by ID\n\nThe service order must have IN_DIAGNOSIS status and be assigned to the authenticated mechanic.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"services\": [\n    {\n      \"serviceId\": \"{{serviceId}}\"\n    }\n  ],\n  \"parts\": [\n    {\n      \"inventoryId\": \"{{partId}}\",\n      \"quantity\": 2\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "PATCH /service-orders/{id}/approve-budget",
+          "event": [],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/approve-budget",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders", "{{serviceOrderId}}", "approve-budget"]
+            },
+            "description": "Approves the budget for a service order"
+          }
+        },
+        {
+          "name": "PATCH /service-orders/{id}/cancel-service",
+          "event": [],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/cancel-service",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders", "{{serviceOrderId}}", "cancel-service"]
+            },
+            "description": "Cancels a service order\n\nThe service order can be canceled in any status except FINISHED or DELIVERED."
+          }
+        },
+        {
+          "name": "PATCH /service-orders/{id}/start-service",
+          "event": [],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/start-service",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders", "{{serviceOrderId}}", "start-service"]
+            },
+            "description": "Starts service execution by ID\n\nThe service order must be AWAITING_EXECUTION and assigned to the authenticated mechanic."
+          }
+        },
+        {
+          "name": "PATCH /service-orders/{id}/finish-service",
+          "event": [],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/finish-service",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders", "{{serviceOrderId}}", "finish-service"]
+            },
+            "description": "Finishes service execution by ID\n\nThe service order must be IN EXECUTION and assigned to the authenticated mechanic."
+          }
+        },
+        {
+          "name": "PATCH /service-orders/{id}/deliver",
+          "event": [],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/deliver",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-orders", "{{serviceOrderId}}", "deliver"]
+            },
+            "description": "Delivers a service order by ID\n\nThe service order must have FINISHED status."
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Decisão do orçamento (links do e-mail)",
+      "item": [
+        {
+          "name": "GET /budget-decisions/{token}",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/budget-decisions/{{decisionToken}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["budget-decisions", "{{decisionToken}}"]
+            },
+            "description": "Shows the confirmation page of the approve/reject link sent by e-mail\n\nDoes not change the service order: only the POST registers the decision. The token is signed (HMAC) and expires in 7 days.",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "POST /budget-decisions/{token}",
+          "event": [],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/budget-decisions/{{decisionToken}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["budget-decisions", "{{decisionToken}}"]
+            },
+            "description": "Registers the decision of the e-mail link (approve or reject)\n\nReuses the budget decision flow of the webhook: the first decision wins; repeated or opposite decisions are ignored.",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Webhooks",
+      "item": [
+        {
+          "name": "POST /webhooks/budget-decision",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Assina o corpo EXATO enviado: X-Signature = sha256=<HMAC-SHA256(body, BUDGET_WEBHOOK_SECRET)>",
+                  "const secret = pm.collectionVariables.get(\"webhookSecret\");",
+                  "const body = pm.variables.replaceIn(pm.request.body.raw);",
+                  "pm.request.body.update({mode:\"raw\", raw: body, options:{raw:{language:\"json\"}}});",
+                  "const hex = CryptoJS.HmacSHA256(body, secret).toString(CryptoJS.enc.Hex);",
+                  "pm.variables.set(\"webhookSignature\", \"sha256=\" + hex);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"status 200\",()=>pm.response.to.have.status(200));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Signature",
+                "value": "{{webhookSignature}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/budget-decision",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhooks", "budget-decision"]
+            },
+            "description": "Receives the external approval or rejection of a service order budget\n\nNot authenticated by JWT: the call is authenticated by the HMAC-SHA256 signature of the raw body in the X-Signature header. APPROVED moves the service order to execution; REJECTED cancels it and releases its parts. Repeated decisions, or decisions for a service order that is no longer awaiting approval, are ignored (processed: false).\n\n**Signature:** `sha256=` followed by the hex HMAC-SHA256 of the exact bytes sent as the body, keyed with `BUDGET_WEBHOOK_SECRET`.\n\nNode.js: `\"sha256=\" + createHmac(\"sha256\", secret).update(body).digest(\"hex\")`\n\nShell: `printf %s \"$BODY\" | openssl dgst -sha256 -hmac \"$SECRET\"` (prefix the hex result with `sha256=`)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceOrderId\": \"{{serviceOrderId}}\",\n  \"decision\": \"APPROVED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
