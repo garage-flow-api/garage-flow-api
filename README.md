@@ -56,101 +56,88 @@ Neste repositório, o ambiente de desenvolvimento é executado com Docker Compos
 
 ## Desenho da arquitetura
 
-A solução tem três partes: a API (componentes da aplicação), a infraestrutura na Azure em que ela roda e o fluxo de deploy que leva cada versão até o cluster.
+Os diagramas abaixo mostram os componentes da API, a infraestrutura na Azure e o fluxo de deploy.
 
 ### Componentes da aplicação
 
-Monólito NestJS organizado em contextos de negócio (`auth`, `client`, `vehicle`, `service`, `inventory`, `service-orders`), cada um com as mesmas quatro camadas. As dependências apontam para o domínio: os casos de uso dependem de repositórios abstratos, implementados com Prisma na camada de infraestrutura.
+Monólito NestJS dividido em contextos de negócio (`auth`, `client`, `vehicle`, `service`, `inventory`, `service-orders` e `notification`), organizados nas camadas presentation, application, domain e infrastructure. Os casos de uso dependem de interfaces (repositórios e `NotificationGateway`), implementadas na camada de infraestrutura com Prisma e SMTP.
+
+Quando o status de uma OS muda, o cliente recebe um e-mail com o link de acompanhamento. No orçamento, o e-mail traz também os links para aprovar ou recusar. Em desenvolvimento, os e-mails ficam no Mailpit.
 
 ```mermaid
+%%{init: {'theme': 'neutral'}}%%
 flowchart LR
     staff(["Equipe da oficina"])
-    customer(["Cliente da oficina"])
+    customer(["Cliente"])
     external(["Sistema de aprovação<br/>de orçamento"])
 
     subgraph api["API NestJS"]
         direction LR
-        subgraph presentation["1 · Presentation"]
-            guards["Guards<br/>JWT · papéis · HMAC"]
-            ctrl["Controllers + DTOs<br/>validação · Swagger /docs"]
+        subgraph common["Transversal"]
+            filter["Filtro global<br/>de exceções"]
+            monitoring["/health e /ready"]
         end
-        subgraph application["2 · Application"]
-            uc["Casos de uso<br/>um por operação"]
+        subgraph presentation["Presentation"]
+            guards["Guards<br/>JWT, papéis e HMAC"]
+            ctrl["Controllers e DTOs"]
         end
-        subgraph domain["3 · Domain"]
-            model["Entidades e value objects<br/>regras de negócio"]
-            ports["Repositórios<br/>abstratos"]
+        subgraph application["Application"]
+            uc["Casos de uso"]
+            gateway["NotificationGateway"]
         end
-        subgraph infrastructure["4 · Infrastructure"]
-            repos["Repositórios Prisma<br/>+ mappers · transações"]
+        subgraph domain["Domain"]
+            model["Entidades e<br/>value objects"]
+            ports["Interfaces dos<br/>repositórios"]
         end
-        subgraph crosscutting["Transversal"]
-            filter["Filtro global de exceções<br/>erro de domínio → HTTP"]
-            monitoring["Monitoring<br/>/health · /ready"]
+        subgraph infrastructure["Infrastructure"]
+            repos["Repositórios Prisma"]
+            smtp["Adapter SMTP<br/>(Nodemailer)"]
         end
     end
 
     db[("PostgreSQL 16")]
+    mail["Servidor SMTP<br/>(Mailpit em desenvolvimento)"]
 
-    staff -- "HTTP + JWT" --> guards
+    staff -- "HTTP com JWT" --> guards
     external -- "webhook assinado" --> guards
-    customer -- "link de rastreamento<br/>sem login" --> ctrl
+    customer -- "links do e-mail,<br/>sem login" --> ctrl
     guards --> ctrl
-    ctrl -- "chama" --> uc
-    uc -- "aplica regras" --> model
+    ctrl --> uc
+    uc --> model
     uc --> ports
-    repos -. "implementa" .-> ports
-    repos -- "SQL" --> db
-    monitoring -- "checa conexão" --> db
+    uc -- "mudança de status" --> gateway
+    ports -. "implementada por" .-> repos
+    gateway -. "implementada por" .-> smtp
+    repos --> db
+    smtp -- "e-mail ao cliente" --> mail
     uc -. "erro de domínio" .-> filter
-
-    classDef actor fill:#f1f5f9,stroke:#475569,color:#0f172a
-    classDef pres fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
-    classDef app fill:#dcfce7,stroke:#16a34a,color:#14532d
-    classDef dom fill:#fef3c7,stroke:#d97706,color:#78350f
-    classDef infra fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
-    classDef cross fill:#f3f4f6,stroke:#6b7280,color:#111827
-    classDef data fill:#e0f2fe,stroke:#0369a1,color:#0c4a6e
-
-    class staff,customer,external actor
-    class guards,ctrl pres
-    class uc app
-    class model,ports dom
-    class repos infra
-    class filter,monitoring cross
-    class db data
-
-    style api fill:none,stroke:#64748b,stroke-width:2px
-    style presentation fill:none,stroke:#2563eb,stroke-dasharray:5 4
-    style application fill:none,stroke:#16a34a,stroke-dasharray:5 4
-    style domain fill:none,stroke:#d97706,stroke-dasharray:5 4
-    style infrastructure fill:none,stroke:#7c3aed,stroke-dasharray:5 4
-    style crosscutting fill:none,stroke:#6b7280,stroke-dasharray:5 4
 ```
-
-Cores: azul = apresentação, verde = aplicação, amarelo = domínio, roxo = infraestrutura e cinza = recursos transversais. Setas tracejadas indicam dependência indireta (implementação de interface ou tratamento de erro).
 
 ### Infraestrutura provisionada
 
-Criada pelo Terraform em [`infra/azure`](infra/README.md), no ambiente `staging` (região `northcentralus`, AKS com 2 nodes `Standard_B2als_v2`). O banco não tem endpoint público: só é alcançável de dentro da VNet do cluster. Os segredos são gerados pelo Terraform e guardados no Key Vault.
+Criada pelo Terraform em [`infra/azure`](infra/README.md), no ambiente `staging` (região `northcentralus`, AKS com 2 nodes `Standard_B2als_v2`). O banco não tem endpoint público e só é acessível de dentro da VNet do cluster. Os segredos são gerados pelo Terraform e guardados no Key Vault.
+
+O servidor SMTP fica fora da Azure e não é criado pelo Terraform. A API usa o servidor configurado nas variáveis `SMTP_*`.
 
 ```mermaid
+%%{init: {'theme': 'neutral'}}%%
 flowchart TB
     user(["Cliente HTTP"])
     gha(["GitHub Actions<br/>login OIDC"])
+    mail(["Servidor SMTP externo"])
 
-    subgraph azure["Azure · staging"]
+    subgraph azure["Azure, ambiente staging"]
         direction TB
         acr[("ACR<br/>imagens da API e dos Jobs")]
-        kv[("Key Vault<br/>segredos gerados pelo Terraform")]
+        kv[("Key Vault")]
 
         subgraph vnet["VNet"]
-            lb["Load Balancer<br/>IP público · IP.nip.io"]
+            lb["Load Balancer<br/>IP público, host IP.nip.io"]
             subgraph aks["AKS"]
                 ingress["NGINX Ingress Controller"]
-                api["Pods da API<br/>HPA 1–5 réplicas por CPU"]
-                jobs["Jobs<br/>migration · primeiro admin"]
-                config["Secret + ConfigMap<br/>variáveis da API"]
+                api["Pods da API<br/>HPA de 1 a 5 réplicas"]
+                jobs["Jobs de migration<br/>e do primeiro admin"]
+                config["Secret e ConfigMap"]
                 alias["Service ExternalName<br/>garage-flow-postgres"]
             end
             subgraph snetpg["Subnet privada"]
@@ -161,44 +148,24 @@ flowchart TB
 
     user -- "HTTP" --> lb
     lb --> ingress
-    ingress -- "roteia para" --> api
-    api -- "consulta o banco" --> alias
-    jobs -- "aplica schema" --> alias
-    alias -. "DNS privado · TLS" .-> pg
+    ingress --> api
+    api --> alias
+    jobs --> alias
+    alias -. "DNS privado, TLS" .-> pg
     config -.-> api
     config -.-> jobs
     aks -. "AcrPull" .-> acr
-    gha -- "1 · push das imagens" --> acr
-    gha -- "2 · kubectl apply" --> aks
+    gha -- "push das imagens" --> acr
+    gha -- "kubectl apply" --> aks
     kv -. "mesmos segredos" .- config
-
-    classDef actor fill:#f1f5f9,stroke:#475569,color:#0f172a
-    classDef edge fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
-    classDef app fill:#dcfce7,stroke:#16a34a,color:#14532d
-    classDef job fill:#fef3c7,stroke:#d97706,color:#78350f
-    classDef conf fill:#f3f4f6,stroke:#6b7280,color:#111827
-    classDef data fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
-
-    class user,gha actor
-    class lb,ingress edge
-    class api app
-    class jobs job
-    class config,alias conf
-    class pg,acr,kv data
-
-    style azure fill:none,stroke:#0078d4,stroke-width:2px
-    style vnet fill:none,stroke:#64748b,stroke-dasharray:5 4
-    style aks fill:none,stroke:#326ce5,stroke-width:2px
-    style snetpg fill:none,stroke:#7c3aed,stroke-dasharray:5 4
+    api -- "SMTP" --> mail
 ```
-
-Cores: azul = entrada de tráfego, verde = API, amarelo = Jobs, roxo = dados e registros, cinza = configuração. A numeração nas setas do GitHub Actions indica a ordem do deploy.
 
 O ambiente local (Docker Desktop, com o PostgreSQL dentro do cluster) está descrito em [Ambiente de produção — Kubernetes](#ambiente-de-produção--kubernetes).
 
 ### Fluxo de deploy
 
-Cada push na `main` passa pelos testes, gera as imagens, aplica as migrations e atualiza a API no AKS. A infraestrutura é criada e destruída só manualmente. O desenho completo, com os jobs e os gatilhos, está em [Pipeline de CI/CD](#pipeline-de-cicd).
+Cada push na `main` passa pelos testes, gera as imagens, aplica as migrations e atualiza a API no AKS. A infraestrutura é criada e destruída só manualmente. O desenho com os jobs e os gatilhos está em [Pipeline de CI/CD](#pipeline-de-cicd).
 
 ## Arquitetura
 
@@ -612,47 +579,30 @@ A pipeline usa GitHub Actions e a stack **Azure** de `infra/`, em dois workflows
 ### Fluxo
 
 ```mermaid
+%%{init: {'theme': 'neutral'}}%%
 flowchart LR
-    subgraph sgManual["Manual · workflow infra"]
+    subgraph sgManual["Workflow infra, manual"]
         direction LR
         RUNINFRA(["Run workflow"]) -- "provision + sim" --> PROV["provision<br/>terraform apply"]
         RUNINFRA -- "destroy + destruir" --> DEST["destroy<br/>terraform destroy"]
     end
 
-    subgraph sgMain["main · workflow ci-cd"]
+    subgraph sgMain["Workflow ci-cd na main"]
         direction LR
-        PUSH(["Push na main"]) --> CI2["ci<br/>lint · build · testes"]
-        PUSH --> VAL2["validate-infra<br/>Terraform · Kustomize"]
-        CI2 --> IMG2["image<br/>build + Trivy + push no ACR"]
-        IMG2 -- "infra no ar" --> DEP["deploy<br/>migration · admin · manifestos<br/>rollout · health check"]
+        PUSH(["Push na main"]) --> CI2["ci<br/>lint, build e testes"]
+        PUSH --> VAL2["validate-infra<br/>Terraform e Kustomize"]
+        CI2 --> IMG2["image<br/>build, Trivy e push no ACR"]
+        IMG2 -- "infra no ar" --> DEP["deploy<br/>migration, admin, manifestos<br/>e health check"]
         VAL2 --> DEP
         IMG2 -. "infra destruída" .-> SKIP["deploy pulado"]
     end
 
-    subgraph sgPr["Pull request"]
+    subgraph sgPr["Workflow ci-cd em PR"]
         direction LR
-        PR(["Pull request"]) --> CI1["ci<br/>lint · build · testes"]
-        PR --> VAL1["validate-infra<br/>Terraform · Kustomize"]
-        CI1 --> IMG1["image<br/>build + Trivy"]
+        PR(["Pull request"]) --> CI1["ci<br/>lint, build e testes"]
+        PR --> VAL1["validate-infra<br/>Terraform e Kustomize"]
+        CI1 --> IMG1["image<br/>build e Trivy"]
     end
-
-    classDef trigger fill:#f1f5f9,stroke:#475569,color:#0f172a
-    classDef check fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
-    classDef build fill:#dcfce7,stroke:#16a34a,color:#14532d
-    classDef deploy fill:#bbf7d0,stroke:#15803d,color:#14532d,stroke-width:2px
-    classDef infra fill:#fef3c7,stroke:#d97706,color:#78350f
-    classDef skip fill:#f9fafb,stroke:#9ca3af,color:#4b5563,stroke-dasharray:4 3
-
-    class PR,PUSH,RUNINFRA trigger
-    class CI1,CI2,VAL1,VAL2 check
-    class IMG1,IMG2 build
-    class DEP deploy
-    class PROV,DEST infra
-    class SKIP skip
-
-    style sgPr fill:none,stroke:#2563eb,stroke-dasharray:5 4
-    style sgMain fill:none,stroke:#16a34a,stroke-dasharray:5 4
-    style sgManual fill:none,stroke:#d97706,stroke-dasharray:5 4
 ```
 
 ### Jobs
@@ -691,7 +641,7 @@ Fora da `main` ou sem a confirmação exata, o job falha antes de qualquer acess
 - **O Trivy bloqueia a publicação:** com vulnerabilidade `CRITICAL` ou `HIGH` corrigível na imagem da API, nada vai para o ACR e não há deploy. Na imagem dos Jobs o scan só reporta, porque ela leva as dependências de desenvolvimento.
 - Em pushes seguidos, só o commit mais recente da `main` é implantado; execuções de commits anteriores pulam o deploy.
 
-Tempo da pipeline com deploy: cerca de **8 minutos** de ponta a ponta (`ci` ~1,5 min → `image` ~4 min → `deploy` ~2,5 min; o `validate-infra` roda em paralelo), medido na primeira execução real.
+Tempo da pipeline com deploy: cerca de **8 minutos** de ponta a ponta (`ci` cerca de 1,5 min, `image` cerca de 4 min e `deploy` cerca de 2,5 min, com o `validate-infra` em paralelo), medido na primeira execução real.
 
 ## Como usar e testar a API
 
