@@ -127,7 +127,7 @@ infra/
 | Recurso | Origem | Finalidade |
 | --- | --- | --- |
 | Helm release `nginx-ingress` (namespace `ingress-nginx`) | Terraform | Ingress Controller com Service `LoadBalancer`, classe `nginx`; chart fixado em `ingress_chart_version` |
-| Secret `garage-flow-secrets` | Terraform | `DATABASE_URL`, `POSTGRES_*`, `JWT_SECRET`, `TRACKING_TOKEN_SECRET` |
+| Secret `garage-flow-secrets` | Terraform | `DATABASE_URL`, `POSTGRES_*`, `JWT_SECRET`, `TRACKING_TOKEN_SECRET`, `BUDGET_WEBHOOK_SECRET` (gerado), `SMTP_USER`/`SMTP_PASS` (de `TF_VAR_smtp_user`/`TF_VAR_smtp_pass`, vazios por padrão) |
 | Secret `garage-flow-bootstrap-admin` | `deploy-app.sh`, só durante o Job de bootstrap | Credenciais do primeiro administrador (a senha fica no Key Vault) |
 | Service `garage-flow-postgres` (ExternalName) | Terraform | Alias DNS para o banco gerenciado, preservando o host usado pelo Job de migration |
 | ConfigMap, Deployment, Service, Ingress, HPA | `k8s/` via `overlays/cloud` | Aplicação |

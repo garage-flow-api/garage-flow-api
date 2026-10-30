@@ -6,36 +6,17 @@
     "outDir": "./dist",
     "baseUrl": "./",
     "paths": {
-      "@common/*": [
-        "src/common/*"
-      ],
-      "@client/*": [
-        "src/modules/client/*"
-      ],
-      "@vehicle/*": [
-        "src/modules/vehicle/*"
-      ],
-      "@prisma/*": [
-        "generated/prisma/*"
-      ],
-      "@service/*": [
-        "src/modules/service/*"
-      ],
-      "@auth/*": [
-        "src/modules/auth/*"
-      ],
-      "@generated/prisma/*": [
-        "generated/prisma/*"
-      ],
-      "@inventory/*": [
-        "src/modules/inventory/*"
-      ],
-      "@infra/*": [
-        "src/infra/*"
-      ],
-      "@service-orders/*": [
-        "src/modules/service-orders/*"
-      ],
+      "@common/*": ["src/common/*"],
+      "@client/*": ["src/modules/client/*"],
+      "@vehicle/*": ["src/modules/vehicle/*"],
+      "@prisma/*": ["generated/prisma/*"],
+      "@service/*": ["src/modules/service/*"],
+      "@auth/*": ["src/modules/auth/*"],
+      "@generated/prisma/*": ["generated/prisma/*"],
+      "@inventory/*": ["src/modules/inventory/*"],
+      "@infra/*": ["src/infra/*"],
+      "@service-orders/*": ["src/modules/service-orders/*"],
+      "@notification/*": ["src/modules/notification/*"]
     },
     "sourceMap": true,
     "declaration": true,
@@ -43,10 +24,7 @@
     "incremental": true,
     "skipLibCheck": true,
     "strict": true,
-    "types": [
-      "node",
-      "jest"
-    ],
+    "types": ["node", "jest"],
     "esModuleInterop": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true

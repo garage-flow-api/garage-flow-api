@@ -26,10 +26,14 @@ import { ClientModule } from '@client/client.module';
 import { VehicleModule } from '@vehicle/vehicle.module';
 import { ServiceModule } from '@service/service.module';
 import { InventoryModule } from '@inventory/inventory.module';
+import { NotificationModule } from '@notification/notification.module';
+import { NotifyServiceOrderStatusChangeUseCase } from './application/use-cases/notify-service-order-status-change.use-case';
+import { BuildServiceOrderBudgetUseCase } from './application/use-cases/build-service-order-budget.use-case';
+import { BudgetDecisionController } from '@service-orders/presentation/budget-decision.controller';
 
 @Module({
-  imports: [ClientModule, VehicleModule, ServiceModule, InventoryModule],
-  controllers: [ServiceOrdersController, BudgetWebhookController],
+  imports: [ClientModule, VehicleModule, ServiceModule, InventoryModule, NotificationModule],
+  controllers: [ServiceOrdersController, BudgetWebhookController, BudgetDecisionController],
   providers: [
     CreateServiceOrderUseCase,
     FindServiceOrderByIdUseCase,
@@ -50,6 +54,8 @@ import { InventoryModule } from '@inventory/inventory.module';
     GetServiceOrderTrackingLinkUseCase,
     GetAverageExecutionTimeUseCase,
     BuildServiceOrderItemsUseCase,
+    BuildServiceOrderBudgetUseCase,
+    NotifyServiceOrderStatusChangeUseCase,
     { provide: ServiceOrderRepository, useClass: PrismaServiceOrderRepository },
   ],
 })

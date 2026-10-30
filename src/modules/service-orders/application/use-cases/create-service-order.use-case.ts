@@ -6,6 +6,7 @@ import { ServiceOrder } from '@service-orders/domain/entities/service-order.enti
 import { ServiceOrderRepository } from '@service-orders/domain/repositories/service-order.repository';
 import { BuildServiceOrderItemsUseCase } from './build-service-order-items.use-case';
 import { CalculateTotalAmountUseCase } from './calculate-total-amount.use-case';
+import { NotifyServiceOrderStatusChangeUseCase } from './notify-service-order-status-change.use-case';
 
 export interface OpenServiceOrderInput {
   client: {
@@ -35,6 +36,7 @@ export class CreateServiceOrderUseCase {
     private readonly ensureVehicle: EnsureVehicleUseCase,
     private readonly buildServiceOrderItems: BuildServiceOrderItemsUseCase,
     private readonly calculateTotalAmount: CalculateTotalAmountUseCase,
+    private readonly notifyStatusChange: NotifyServiceOrderStatusChangeUseCase,
   ) {}
 
   async execute(input: OpenServiceOrderInput): Promise<ServiceOrder> {
@@ -46,22 +48,20 @@ export class CreateServiceOrderUseCase {
     const totalAmount = await this.calculateTotalAmount.execute(serviceItems, partItems);
 
     // todas as escritas na mesma transação: ou grava tudo, ou nada.
-    return this.transactionRunner.run(async () => {
+    const serviceOrder = await this.transactionRunner.run(async () => {
       const client = await this.ensureClient.execute(input.client);
       const vehicle = await this.ensureVehicle.execute({
         ...input.vehicle,
         clientId: client.id,
       });
 
-      const serviceOrder = ServiceOrder.create(
-        vehicle.id,
-        input.description,
-        serviceItems,
-        partItems,
-        totalAmount,
+      return this.serviceOrderRepository.save(
+        ServiceOrder.create(vehicle.id, input.description, serviceItems, partItems, totalAmount),
       );
-
-      return this.serviceOrderRepository.save(serviceOrder);
     });
+
+    // fora da transação: só avisa o cliente depois que a OS foi gravada de fato.
+    await this.notifyStatusChange.execute(serviceOrder);
+    return serviceOrder;
   }
 }
