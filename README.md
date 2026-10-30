@@ -54,6 +54,119 @@ Neste repositório, o ambiente de desenvolvimento é executado com Docker Compos
 - **Husky**
 - **SonarQube** (análise estática de código, apenas em desenvolvimento)
 
+## Desenho da arquitetura
+
+Os diagramas abaixo mostram os componentes da API, a infraestrutura na Azure e o fluxo de deploy.
+
+### Componentes da aplicação
+
+Monólito NestJS dividido em contextos de negócio (`auth`, `client`, `vehicle`, `service`, `inventory`, `service-orders` e `notification`), organizados nas camadas presentation, application, domain e infrastructure. Os casos de uso dependem de interfaces (repositórios e `NotificationGateway`), implementadas na camada de infraestrutura com Prisma e SMTP.
+
+Quando o status de uma OS muda, o cliente recebe um e-mail com o link de acompanhamento. No orçamento, o e-mail traz também os links para aprovar ou recusar. Em desenvolvimento, os e-mails ficam no Mailpit.
+
+```mermaid
+%%{init: {'theme': 'neutral'}}%%
+flowchart LR
+    staff(["Equipe da oficina"])
+    customer(["Cliente"])
+    external(["Sistema de aprovação<br/>de orçamento"])
+
+    subgraph api["API NestJS"]
+        direction LR
+        subgraph common["Transversal"]
+            filter["Filtro global<br/>de exceções"]
+            monitoring["/health e /ready"]
+        end
+        subgraph presentation["Presentation"]
+            guards["Guards<br/>JWT, papéis e HMAC"]
+            ctrl["Controllers e DTOs"]
+        end
+        subgraph application["Application"]
+            uc["Casos de uso"]
+            gateway["NotificationGateway"]
+        end
+        subgraph domain["Domain"]
+            model["Entidades e<br/>value objects"]
+            ports["Interfaces dos<br/>repositórios"]
+        end
+        subgraph infrastructure["Infrastructure"]
+            repos["Repositórios Prisma"]
+            smtp["Adapter SMTP<br/>(Nodemailer)"]
+        end
+    end
+
+    db[("PostgreSQL 16")]
+    mail["Servidor SMTP<br/>(Mailpit em desenvolvimento)"]
+
+    staff -- "HTTP com JWT" --> guards
+    external -- "webhook assinado" --> guards
+    customer -- "links do e-mail,<br/>sem login" --> ctrl
+    guards --> ctrl
+    ctrl --> uc
+    uc --> model
+    uc --> ports
+    uc -- "mudança de status" --> gateway
+    ports -. "implementada por" .-> repos
+    gateway -. "implementada por" .-> smtp
+    repos --> db
+    smtp -- "e-mail ao cliente" --> mail
+    uc -. "erro de domínio" .-> filter
+```
+
+### Infraestrutura provisionada
+
+Criada pelo Terraform em [`infra/azure`](infra/README.md), no ambiente `staging` (região `northcentralus`, AKS com 2 nodes `Standard_B2als_v2`). O banco não tem endpoint público e só é acessível de dentro da VNet do cluster. Os segredos são gerados pelo Terraform e guardados no Key Vault.
+
+O servidor SMTP fica fora da Azure e não é criado pelo Terraform. A API usa o servidor configurado nas variáveis `SMTP_*`.
+
+```mermaid
+%%{init: {'theme': 'neutral'}}%%
+flowchart TB
+    user(["Cliente HTTP"])
+    gha(["GitHub Actions<br/>login OIDC"])
+    mail(["Servidor SMTP externo"])
+
+    subgraph azure["Azure, ambiente staging"]
+        direction TB
+        acr[("ACR<br/>imagens da API e dos Jobs")]
+        kv[("Key Vault")]
+
+        subgraph vnet["VNet"]
+            lb["Load Balancer<br/>IP público, host IP.nip.io"]
+            subgraph aks["AKS"]
+                ingress["NGINX Ingress Controller"]
+                api["Pods da API<br/>HPA de 1 a 5 réplicas"]
+                jobs["Jobs de migration<br/>e do primeiro admin"]
+                config["Secret e ConfigMap"]
+                alias["Service ExternalName<br/>garage-flow-postgres"]
+            end
+            subgraph snetpg["Subnet privada"]
+                pg[("PostgreSQL<br/>Flexible Server 16")]
+            end
+        end
+    end
+
+    user -- "HTTP" --> lb
+    lb --> ingress
+    ingress --> api
+    api --> alias
+    jobs --> alias
+    alias -. "DNS privado, TLS" .-> pg
+    config -.-> api
+    config -.-> jobs
+    aks -. "AcrPull" .-> acr
+    gha -- "push das imagens" --> acr
+    gha -- "kubectl apply" --> aks
+    kv -. "mesmos segredos" .- config
+    api -- "SMTP" --> mail
+```
+
+O ambiente local (Docker Desktop, com o PostgreSQL dentro do cluster) está descrito em [Ambiente de produção — Kubernetes](#ambiente-de-produção--kubernetes).
+
+### Fluxo de deploy
+
+Cada push na `main` passa pelos testes, gera as imagens, aplica as migrations e atualiza a API no AKS. A infraestrutura é criada e destruída só manualmente. O desenho com os jobs e os gatilhos está em [Pipeline de CI/CD](#pipeline-de-cicd).
+
 ## Arquitetura
 
 O projeto utiliza **Domain-Driven Design (DDD)** combinado com **arquitetura em camadas**, dentro de um monólito. Todos os contextos de negócio ficam agrupados em `src/modules/`.
@@ -466,17 +579,30 @@ A pipeline usa GitHub Actions e a stack **Azure** de `infra/`, em dois workflows
 ### Fluxo
 
 ```mermaid
+%%{init: {'theme': 'neutral'}}%%
 flowchart LR
-    PR["Pull request"] --> CI1["ci"] --> IMG1["image<br/>build + Trivy"]
+    subgraph sgManual["Workflow infra, manual"]
+        direction LR
+        RUNINFRA(["Run workflow"]) -- "provision + sim" --> PROV["provision<br/>terraform apply"]
+        RUNINFRA -- "destroy + destruir" --> DEST["destroy<br/>terraform destroy"]
+    end
 
-    PUSH["Push na main"] --> CI2["ci"] --> IMG2["image<br/>build + Trivy + push no ACR"]
-    IMG2 -->|"infra no ar"| DEP["deploy<br/>migration, admin, manifestos,<br/>rollout e health check"]
-    IMG2 -.->|"infra destruída"| SKIP["deploy pulado"]
+    subgraph sgMain["Workflow ci-cd na main"]
+        direction LR
+        PUSH(["Push na main"]) --> CI2["ci<br/>lint, build e testes"]
+        PUSH --> VAL2["validate-infra<br/>Terraform e Kustomize"]
+        CI2 --> IMG2["image<br/>build, Trivy e push no ACR"]
+        IMG2 -- "infra no ar" --> DEP["deploy<br/>migration, admin, manifestos<br/>e health check"]
+        VAL2 --> DEP
+        IMG2 -. "infra destruída" .-> SKIP["deploy pulado"]
+    end
 
-    RUNCD["Run workflow (ci-cd)"] --> CI2
-
-    RUNINFRA["Run workflow (infra)"] -->|"action = provision"| PROV["provision<br/>terraform apply"]
-    RUNINFRA -->|"action = destroy"| DEST["destroy<br/>terraform destroy"]
+    subgraph sgPr["Workflow ci-cd em PR"]
+        direction LR
+        PR(["Pull request"]) --> CI1["ci<br/>lint, build e testes"]
+        PR --> VAL1["validate-infra<br/>Terraform e Kustomize"]
+        CI1 --> IMG1["image<br/>build e Trivy"]
+    end
 ```
 
 ### Jobs
@@ -486,7 +612,7 @@ flowchart LR
 | `ci` | PR, push na `main` e "Run workflow" do `ci-cd` | `npm ci`, Prisma generate, lint, Prettier, build e testes com cobertura (artefato `coverage`) |
 | `validate-infra` | PR, push na `main` e "Run workflow" do `ci-cd`, em paralelo ao `ci` | `terraform fmt` e `validate` em `infra/azure` (sem acessar a Azure) e `kubectl kustomize` na base `k8s/` e nos overlays. Se falhar, o deploy não roda |
 | `image` | Depois do `ci` | Builda a imagem da API e a dos Jobs e roda o Trivy (`CRITICAL`/`HIGH`) nas duas: bloqueante na da API e informativo na dos Jobs. Na `main` (push ou disparo manual), publica as duas no ACR, com o SHA curto do commit como tag |
-| `deploy` | Depois do `image`, só se as imagens foram publicadas | Jobs de migration e de criação do primeiro admin, overlay `cloud` (API, Service, Ingress, HPA), rollout e checagem de `/health` e `/ready`. As URLs aparecem no resumo da execução |
+| `deploy` | Depois do `image` e do `validate-infra`, só na `main` e se as imagens foram publicadas | Jobs de migration e de criação do primeiro admin, overlay `cloud` (API, Service, Ingress, HPA), rollout e checagem de `/health` e `/ready`. As URLs aparecem no resumo da execução |
 | `provision` | Só pelo "Run workflow" do `infra` | `terraform plan` + `apply` em `infra/azure`: AKS, ACR, PostgreSQL, Key Vault e Ingress (~15-20 min) |
 | `destroy` | Só pelo "Run workflow" do `infra` | Remove a aplicação do cluster, o Ingress e o restante da infra com `terraform destroy` (~10-15 min) |
 
@@ -515,7 +641,7 @@ Fora da `main` ou sem a confirmação exata, o job falha antes de qualquer acess
 - **O Trivy bloqueia a publicação:** com vulnerabilidade `CRITICAL` ou `HIGH` corrigível na imagem da API, nada vai para o ACR e não há deploy. Na imagem dos Jobs o scan só reporta, porque ela leva as dependências de desenvolvimento.
 - Em pushes seguidos, só o commit mais recente da `main` é implantado; execuções de commits anteriores pulam o deploy.
 
-Tempo médio da pipeline: _TODO — preencher após a execução real_.
+Tempo da pipeline com deploy: cerca de **8 minutos** de ponta a ponta (`ci` cerca de 1,5 min, `image` cerca de 4 min e `deploy` cerca de 2,5 min, com o `validate-infra` em paralelo), medido na primeira execução real.
 
 ## Como usar e testar a API
 
