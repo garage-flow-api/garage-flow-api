@@ -102,6 +102,22 @@ variable "bootstrap_admin_email" {
   default = "admin@garage-flow.local"
 }
 
+# Credenciais do servidor SMTP externo (não é criado pelo Terraform). Vazias, a API conecta
+# sem autenticação. Informe por TF_VAR_smtp_user / TF_VAR_smtp_pass, nunca no tfvars versionado.
+variable "smtp_user" {
+  description = "Usuário do servidor SMTP usado nos e-mails ao cliente."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "smtp_pass" {
+  description = "Senha do servidor SMTP usado nos e-mails ao cliente."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "ingress_chart_version" {
   description = "Versão do chart nginx-ingress (F5 NGINX). Fixada para recriar o ambiente com a mesma versão."
   type        = string

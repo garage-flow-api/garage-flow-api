@@ -35,6 +35,11 @@ resource "random_password" "tracking_token_secret" {
   special = false
 }
 
+resource "random_password" "budget_webhook_secret" {
+  length  = 64
+  special = false
+}
+
 resource "random_password" "bootstrap_admin" {
   length      = 20
   special     = false
@@ -118,6 +123,7 @@ module "secrets" {
     postgres-password     = random_password.db.result
     jwt-secret            = random_password.jwt_secret.result
     tracking-token-secret = random_password.tracking_token_secret.result
+    budget-webhook-secret = random_password.budget_webhook_secret.result
     admin-email           = var.bootstrap_admin_email
     admin-password        = random_password.bootstrap_admin.result
   }
@@ -139,6 +145,9 @@ module "kubernetes_platform" {
 
   jwt_secret            = random_password.jwt_secret.result
   tracking_token_secret = random_password.tracking_token_secret.result
+  budget_webhook_secret = random_password.budget_webhook_secret.result
+  smtp_user             = var.smtp_user
+  smtp_pass             = var.smtp_pass
 
   ingress_chart_version = var.ingress_chart_version
   ingress_service_annotations = {

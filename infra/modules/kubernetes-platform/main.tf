@@ -65,6 +65,9 @@ resource "kubernetes_secret_v1" "app" {
     DATABASE_URL          = local.database_url
     JWT_SECRET            = var.jwt_secret
     TRACKING_TOKEN_SECRET = var.tracking_token_secret
+    BUDGET_WEBHOOK_SECRET = var.budget_webhook_secret
+    SMTP_USER             = var.smtp_user
+    SMTP_PASS             = var.smtp_pass
   }
 }
 
