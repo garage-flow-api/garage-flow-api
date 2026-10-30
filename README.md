@@ -135,6 +135,9 @@ JWT_EXPIRES_IN=1d
 # Link público de rastreamento da OS
 TRACKING_TOKEN_SECRET=troque-por-outro-segredo-forte
 
+# Webhook de decisão do orçamento: chave do HMAC que assina o corpo da requisição
+BUDGET_WEBHOOK_SECRET=troque-por-um-segredo-do-webhook
+
 # URL pública da API, usada nos links enviados por e-mail (acompanhamento e orçamento)
 PUBLIC_BASE_URL=http://localhost:3000
 
@@ -171,7 +174,7 @@ A API aguarda o PostgreSQL ficar saudável, gera o Prisma Client, executa as mig
 ### 3. Acessos
 
 - **API:** `http://localhost:3000`
-- **Swagger:** `http://localhost:3000/docs`
+- **Swagger:** `http://localhost:3000/docs` (JSON OpenAPI em `http://localhost:3000/docs-json`)
 - **SonarQube:** `http://localhost:9000` (usuário/senha padrão `admin`/`admin` no primeiro acesso) - disponível apenas ao subir com `docker-compose.development.yaml`.
 - **Mailpit (caixa de entrada de teste):** `http://localhost:8025`. Todos os e-mails enviados pela API em desenvolvimento aparecem aqui.
 
@@ -621,10 +624,24 @@ Esta seção descreve, passo a passo, como percorrer o ciclo de vida completo de
 
 ```bash
 POST /service-orders
-{ "clientCpfCnpj": "529.982.247-25", "licensePlate": "ABC1D23", "description": "Ruído no motor" }
+{
+  "client": {
+    "cpfCnpj": "529.982.247-25",
+    "name": "João da Silva",
+    "phone": "11999998888",
+    "address": "Rua das Flores, 123 - São Paulo/SP",
+    "email": "joao@example.com"
+  },
+  "vehicle": { "licensePlate": "ABC1D23", "brand": "Fiat", "model": "Uno", "year": 2020 },
+  "description": "Ruído no motor",
+  "services": [],
+  "parts": []
+}
 ```
 
-A OS nasce com status `RECEIVED`. A resposta inclui um `trackingLink` - um link público que o cliente pode usar para acompanhar o status sem autenticação (`GET /service-orders/track/:token`) e o `totalAmount` começa zerado.
+O cliente (por CPF/CNPJ) e o veículo (por placa) são reaproveitados quando já existem; caso contrário, são criados na mesma requisição. `services` e `parts` são opcionais.
+
+A OS nasce com status `RECEIVED`. A resposta inclui um `trackingLink` - um link público que o cliente pode usar para acompanhar o status sem autenticação (`GET /service-orders/track/:token`) - e o `totalAmount`, que começa zerado quando a OS é aberta sem serviços nem peças.
 
 #### 6.2 Diagnóstico (`MECHANIC`)
 
@@ -693,15 +710,16 @@ Transiciona a OS para `DELIVERED`, encerrando o ciclo.
 ### 7. Consultas e métricas da OS
 
 ```bash
-GET /service-orders                                 # lista todas as OS
+GET /service-orders                                 # lista as OS abertas, por prioridade
 GET /service-orders/:id                              # detalhes de uma OS
 GET /service-orders/:id/tracking-link                # reobtém o link público de rastreamento
 GET /service-orders/metrics/average-execution-time   # tempo médio de execução das OS finalizadas
 DELETE /service-orders/:id                           # soft delete da OS
 ```
 
-- **`GET /track/:token`**: consulta pública de status via o token do link de rastreamento, sem necessidade de autenticação.
-- **`GET /metrics/average-execution-time`** (qualquer usuário autenticado): calcula o tempo médio de execução das ordens de serviço com status `FINISHED` ou `DELIVERED`. Aceita filtro opcional por período via query params `from` e `to` (formato `AAAA-MM-DD`); sem os filtros, considera todas as OS concluídas. Retorna:
+- **`GET /service-orders`**: sem filtro, devolve só as OS abertas (`FINISHED`, `DELIVERED` e `CANCELED` ficam de fora), ordenadas por prioridade de status (em execução, aguardando aprovação, em diagnóstico, recebida) e, dentro do mesmo status, da mais antiga para a mais nova. Com `?status=`, devolve as OS desse status (inclusive as encerradas), da mais antiga para a mais nova. `?mechanicId=` filtra pelo mecânico responsável.
+- **`GET /service-orders/track/:token`**: consulta pública de status via o token do link de rastreamento, sem necessidade de autenticação.
+- **`GET /service-orders/metrics/average-execution-time`** (qualquer usuário autenticado): calcula o tempo médio de execução das ordens de serviço com status `FINISHED` ou `DELIVERED`. Aceita filtro opcional por período via query params `from` e `to` (formato `AAAA-MM-DD`); sem os filtros, considera todas as OS concluídas. Retorna:
 
   ```json
   {
@@ -733,7 +751,7 @@ O e-mail de orçamento traz dois links assinados (HMAC-SHA256, validade de 7 dia
 2. O botão da página envia `POST /budget-decisions/:token`, que registra a decisão pelo mesmo caso de uso do webhook de orçamento: aprovar leva a OS para `AWAITING_EXECUTION`, recusar a cancela.
 3. A primeira decisão vale. Repetir o link, ou usar o outro, mostra "Decisão já registrada".
 
-Essas rotas retornam HTML e não aparecem no Swagger.
+Essas rotas retornam HTML e estão documentadas no Swagger (grupo **Budget decisions**).
 
 #### Testando localmente
 
@@ -743,6 +761,81 @@ Essas rotas retornam HTML e não aparecem no Swagger.
 4. Clique em **Aprovar**, confirme na página e veja a OS em `AWAITING_EXECUTION` (e um novo e-mail de status).
 
 Em produção, aponte `SMTP_*` para um provedor real e `PUBLIC_BASE_URL` para o domínio público da API.
+
+### 9. Swagger, collection e webhook
+
+#### Swagger
+
+Com a API no ar, a documentação interativa fica em `http://localhost:3000/docs` e o JSON OpenAPI em `http://localhost:3000/docs-json`. Uma cópia do OpenAPI está em [`docs/openapi.json`](docs/openapi.json).
+
+#### Collection do Postman
+
+A collection com **todos os endpoints** está em [`docs/Garage-Flow-API.postman_collection.json`](docs/Garage-Flow-API.postman_collection.json). Ela foi gerada a partir do OpenAPI.
+
+Como usar:
+
+1. No Postman, use `Import` e selecione o arquivo da collection.
+2. Suba a API (`docker compose -f docker-compose.development.yaml up --build`).
+3. Rode a pasta **00 - Autenticação**. Ela faz login com os quatro perfis do seed (senha `Password123!`) e guarda um token por perfil.
+4. Rode a pasta **01 - Fluxo da OS** em ordem. Ela percorre o ciclo completo (cadastro de serviço e peça, abertura da OS, diagnóstico, orçamento, aprovação, execução, finalização e entrega) e captura os ids automaticamente.
+5. As pastas **02 - …** trazem todos os endpoints, agrupados por contexto.
+
+Variáveis da collection:
+
+| Variável        | Para que serve                                                                                                                 |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `baseUrl`       | URL da API (padrão `http://localhost:3000`)                                                                                    |
+| `role`          | Perfil usado no `Authorization`: `admin`, `advisor`, `mechanic` ou `stock` (padrão `admin`). Troque para testar cada permissão |
+| `webhookSecret` | Mesmo valor de `BUDGET_WEBHOOK_SECRET` da API                                                                                  |
+| `decisionToken` | Token do link de aprovar/recusar recebido por e-mail (Mailpit em `http://localhost:8025`)                                      |
+
+Os passos exclusivos do mecânico (iniciar diagnóstico, adicionar serviços e peças, iniciar e finalizar a execução) exigem `role = mechanic`; os demais passos do fluxo funcionam com `admin`. Veja a tabela de permissões na seção 1.
+
+#### Webhook de decisão do orçamento
+
+`POST /webhooks/budget-decision` recebe a aprovação ou a recusa de um orçamento por um sistema externo. Ele não usa JWT: a chamada é autenticada por uma assinatura HMAC do corpo.
+
+- **Header:** `X-Signature: sha256=<hex>`
+- **Cálculo:** HMAC-SHA256 do **corpo bruto** da requisição, com a chave `BUDGET_WEBHOOK_SECRET`.
+- **Corpo:**
+
+```json
+{
+  "serviceOrderId": "3f6c1c0e-8c2e-4a8e-9b53-2f1f6a0d1c11",
+  "decision": "APPROVED"
+}
+```
+
+`decision` aceita `APPROVED` ou `REJECTED`. Aprovar leva a OS para `AWAITING_EXECUTION`; recusar cancela a OS e libera as peças reservadas.
+
+Exemplo de assinatura em Node.js:
+
+```js
+const { createHmac } = require('crypto');
+
+const body = JSON.stringify({ serviceOrderId: '...', decision: 'APPROVED' });
+const signature =
+  'sha256=' + createHmac('sha256', process.env.BUDGET_WEBHOOK_SECRET).update(body).digest('hex');
+```
+
+Exemplo com `openssl`:
+
+```bash
+echo -n '{"serviceOrderId":"...","decision":"APPROVED"}' \
+  | openssl dgst -sha256 -hmac "$BUDGET_WEBHOOK_SECRET"
+```
+
+Respostas:
+
+| Status                       | Quando                                                                              |
+| ---------------------------- | ----------------------------------------------------------------------------------- |
+| `200` `{"processed": true}`  | Decisão aplicada                                                                    |
+| `200` `{"processed": false}` | Decisão ignorada: a OS não está mais aguardando aprovação (a primeira decisão vale) |
+| `400`                        | Corpo inválido                                                                      |
+| `401`                        | Assinatura ausente ou inválida (ou `BUDGET_WEBHOOK_SECRET` não configurado)         |
+| `404`                        | OS não encontrada                                                                   |
+
+Na collection, o pré-request do webhook calcula o `X-Signature` sozinho a partir da variável `webhookSecret`.
 
 ## Validações
 
@@ -795,8 +888,16 @@ Os testes de integração rodam de forma sequencial (`--runInBand`), já que com
 
 A organização por contexto facilita a localização e manutenção dos testes, sem limitar um teste de integração a apenas um contexto.
 
+O ciclo de vida da OS (abertura, aprovação e recusa, listagem priorizada, transições de status, baixa de estoque, e-mails e links de decisão) é coberto de ponta a ponta em `test/integration/service-orders/presentation/service-orders.lifecycle.spec.ts`.
+
 Para rodar todos os testes (é necessário o docker rodando para os testes de integração):
 
 ```bash
 npm run test
+```
+
+Para gerar o relatório de cobertura:
+
+```bash
+npm run test:cov
 ```
