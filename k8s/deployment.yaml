@@ -49,6 +49,12 @@ spec:
                   name: garage-flow-config
                   key: NODE_ENV
 
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: garage-flow-config
+                  key: PORT
+
             - name: JWT_EXPIRES_IN
               valueFrom:
                 configMapKeyRef:

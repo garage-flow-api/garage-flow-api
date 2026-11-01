@@ -61,7 +61,7 @@ images:
     newName: ${MIGRATION_REPOSITORY}
     newTag: "${IMAGE_TAG}"
 YAML
-  # O F5 NGINX Ingress Controller rejeita Ingress sem host (spec.rules[0].host: Required value).
+  # Define o host exigido pelo Ingress e a URL pública usada nos links dos e-mails.
   if [[ "${overlay}" == "cloud" ]]; then
     cat >>"${target}/kustomization.yaml" <<YAML
 patches:
@@ -72,6 +72,13 @@ patches:
       - op: add
         path: /spec/rules/0/host
         value: "${INGRESS_HOST}"
+  - target:
+      kind: ConfigMap
+      name: garage-flow-config
+    patch: |-
+      - op: replace
+        path: /data/PUBLIC_BASE_URL
+        value: "http://${INGRESS_HOST}"
 YAML
   fi
   echo "${target}"
