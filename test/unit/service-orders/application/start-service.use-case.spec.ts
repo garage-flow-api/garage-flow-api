@@ -34,7 +34,10 @@ describe('StartServiceUseCase', () => {
     expect(order.status).toBe(ServiceOrderStatus.IN_EXECUTION);
     expect(order.serviceStartedAt).toBeInstanceOf(Date);
     expect(repository.save).toHaveBeenCalledWith(order);
-    expect(notifyStatusChange.execute).toHaveBeenCalledWith(order);
+    expect(notifyStatusChange.execute).toHaveBeenCalledWith(
+      order,
+      ServiceOrderStatus.AWAITING_EXECUTION,
+    );
   });
 
   it('rejeita mecânico não atribuído', async () => {

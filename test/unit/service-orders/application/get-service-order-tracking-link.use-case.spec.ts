@@ -18,6 +18,7 @@ describe('GetServiceOrderTrackingLinkUseCase', () => {
       findById: jest.fn(),
       findAll: jest.fn(),
       findAverageExecutionTime: jest.fn(),
+      lockForUpdate: jest.fn(),
     };
     useCase = new GetServiceOrderTrackingLinkUseCase(repository);
   });

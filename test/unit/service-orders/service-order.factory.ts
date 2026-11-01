@@ -72,5 +72,6 @@ export function makeServiceOrderRepositoryMock(): jest.Mocked<ServiceOrderReposi
     findById: jest.fn(),
     findAll: jest.fn(),
     findAverageExecutionTime: jest.fn(),
+    lockForUpdate: jest.fn(),
   };
 }

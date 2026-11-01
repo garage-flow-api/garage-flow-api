@@ -11,6 +11,9 @@ import {
   renderStatusUpdateEmail,
 } from '@notification/infrastructure/email-templates';
 
+// O envio é feito dentro da requisição: timeouts curtos limitam o quanto um SMTP lento a atrasa.
+const SMTP_TIMEOUT_MS = 3000;
+
 @Injectable()
 export class SmtpNotificationGateway implements NotificationGateway {
   private readonly transporter: Transporter;
@@ -24,9 +27,9 @@ export class SmtpNotificationGateway implements NotificationGateway {
       host: process.env.SMTP_HOST ?? 'localhost',
       port,
       secure: port === 465,
-      connectionTimeout: 5000,
-      greetingTimeout: 5000,
-      socketTimeout: 10000,
+      connectionTimeout: SMTP_TIMEOUT_MS,
+      greetingTimeout: SMTP_TIMEOUT_MS,
+      socketTimeout: SMTP_TIMEOUT_MS,
       auth: user ? { user, pass: process.env.SMTP_PASS } : undefined,
     });
     this.from = process.env.SMTP_FROM ?? 'Garage Flow <no-reply@garageflow.local>';
