@@ -167,6 +167,18 @@ O wizard conduz a configuração em 8 etapas e pode ser executado novamente sem 
 
 `infra/azure/.env.azure` é ignorado pelo Git e carregado automaticamente pelos scripts (`lib.sh`). Assim, `provision.sh`, `deploy-app.sh` e `destroy.sh` sempre usam a assinatura escolhida, mesmo que outra esteja ativa no az CLI.
 
+Se o servidor SMTP exigir autenticação, exporte as credenciais antes do provisionamento. Elas são variáveis sensíveis do Terraform e não devem entrar no `staging.tfvars` versionado:
+
+```bash
+export TF_VAR_smtp_user='<usuario-smtp>'
+export TF_VAR_smtp_pass='<senha-smtp>'
+infra/scripts/provision.sh
+```
+
+No GitHub Actions, cadastre o login e a chave SMTP como repository secrets `SMTP_USER` e `SMTP_PASS`. O workflow `infra.yml` os repassa ao Terraform pelas mesmas variáveis `TF_VAR_*`; os valores não aparecem no workflow nem nos logs.
+
+O ambiente cloud está configurado para o relay da Brevo (`smtp-relay.brevo.com:587`). Antes de implantar, substitua o endereço de `SMTP_FROM` em `k8s/configmap.yaml` por um remetente verificado na conta Brevo. No deploy cloud, `PUBLIC_BASE_URL` é substituída automaticamente por `http://<endereco-do-ingress>`.
+
 <details>
 <summary>Configuração manual, sem o wizard</summary>
 
@@ -280,7 +292,7 @@ infra/scripts/deploy-app.sh
 | kubeconfig | `terraform output -raw kubeconfig_command` |
 | Migrations | `kubectl apply -k` do overlay `cloud-migration`, aguardando o Job concluir |
 | Primeiro admin | Cria o Secret `garage-flow-bootstrap-admin` com os outputs `bootstrap_admin_*`, `kubectl apply -k` do overlay `cloud-bootstrap-admin`, aguarda o Job concluir e remove o Secret |
-| API | `kubectl apply -k` do overlay `cloud`, seguido de `kubectl rollout status` |
+| API | Substitui `PUBLIC_BASE_URL` pelo host do Ingress, executa `kubectl apply -k` do overlay `cloud` e aguarda o rollout |
 
 A tag das imagens é o SHA curto do commit, com sufixo `-dirty` se houver alterações locais não commitadas. Para usar outra tag: `infra/scripts/deploy-app.sh <tag>`.
 
