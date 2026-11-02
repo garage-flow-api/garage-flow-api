@@ -554,7 +554,7 @@ Acessos:
 
 ### 9. Aplicar o HPA
 
-O HPA mantém entre 1 e 5 réplicas da API. Uma nova réplica pode ser criada quando a utilização média alcançar `60%` de CPU.
+O HPA mantém entre 1 e 8 réplicas da API. Uma nova réplica pode ser criada quando a utilização média alcançar `60%` de CPU.
 
 Quando a demanda diminui, o HPA aguarda uma janela de estabilização de 60 segundos e reduz, no máximo, 50% das réplicas a cada 30 segundos.
 
