@@ -115,7 +115,7 @@ flowchart LR
 
 ### Infraestrutura provisionada
 
-Criada pelo Terraform em [`infra/azure`](infra/README.md), no ambiente `staging` (região `northcentralus`, AKS com 2 nodes `Standard_B2als_v2`). O banco não tem endpoint público e só é acessível de dentro da VNet do cluster. Os segredos são gerados pelo Terraform e guardados no Key Vault.
+Criada pelo Terraform em [`infra/azure`](infra/README.md), no ambiente `staging` (região `northcentralus`, AKS com 3 nodes `Standard_B2als_v2`, conforme [`staging.tfvars`](infra/azure/environments/staging.tfvars)). O banco não tem endpoint público e só é acessível de dentro da VNet do cluster. Os segredos são gerados pelo Terraform e guardados no Key Vault.
 
 O servidor SMTP fica fora da Azure e não é criado pelo Terraform. A API usa o servidor configurado nas variáveis `SMTP_*`.
 
