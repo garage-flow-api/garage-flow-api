@@ -29,6 +29,17 @@ describe('email-templates', () => {
     expect(email.html).toContain('&lt;script&gt;');
   });
 
+  it('rejeita protocolo não seguro no link de acompanhamento', () => {
+    expect(() =>
+      renderStatusUpdateEmail({
+        to: 'a@b.com',
+        recipientName: 'Maria',
+        status: 'Recebida',
+        trackingLink: 'javascript:alert(1)',
+      }),
+    ).toThrow('Only HTTP and HTTPS URLs are allowed');
+  });
+
   it('o e-mail de orçamento traz itens, total e os links de aprovar e recusar', () => {
     const email = renderBudgetEmail({
       to: 'a@b.com',
@@ -45,4 +56,22 @@ describe('email-templates', () => {
     expect(email.html).toContain('http://x/reject');
     expect(email.text).toContain('Total:');
   });
+
+  it.each(['approveUrl', 'rejectUrl', 'trackingLink'] as const)(
+    'rejeita protocolo não seguro em %s',
+    (field) => {
+      const notification = {
+        to: 'a@b.com',
+        recipientName: 'Maria',
+        lines: [{ description: 'Troca de óleo', amount: 150 }],
+        totalAmount: 150,
+        approveUrl: 'https://example.com/approve',
+        rejectUrl: 'https://example.com/reject',
+        trackingLink: 'https://example.com/track',
+      };
+      notification[field] = 'data:text/html,<script>alert(1)</script>';
+
+      expect(() => renderBudgetEmail(notification)).toThrow('Only HTTP and HTTPS URLs are allowed');
+    },
+  );
 });

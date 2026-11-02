@@ -2,6 +2,7 @@ import {
   type BudgetNotification,
   type StatusNotification,
 } from '@notification/application/notification.gateway';
+import { escape } from 'html-escaper';
 
 export interface RenderedEmail {
   subject: string;
@@ -9,13 +10,17 @@ export interface RenderedEmail {
   text: string;
 }
 
-const escapeHtml = (value: string): string =>
-  value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
+const escapeHtml = (value: string): string => escape(value);
+
+const escapeHttpUrl = (value: string): string => {
+  const { protocol } = new URL(value);
+
+  if (protocol !== 'http:' && protocol !== 'https:') {
+    throw new TypeError('Only HTTP and HTTPS URLs are allowed');
+  }
+
+  return escape(value);
+};
 
 const formatCurrency = (value: number): string =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -23,7 +28,7 @@ const formatCurrency = (value: number): string =>
 export function renderStatusUpdateEmail(notification: StatusNotification): RenderedEmail {
   const name = escapeHtml(notification.recipientName);
   const status = escapeHtml(notification.status);
-  const link = escapeHtml(notification.trackingLink);
+  const link = escapeHttpUrl(notification.trackingLink);
 
   return {
     subject: `Garage Flow: sua OS está em "${notification.status}"`,
@@ -52,7 +57,7 @@ export function renderBudgetEmail(notification: BudgetNotification): RenderedEma
     html: `<p>Olá, ${name}!</p>
 <p>O orçamento da sua ordem de serviço está pronto:</p>
 <table cellpadding="4">${rows}<tr><td><strong>Total</strong></td><td align="right"><strong>${formatCurrency(notification.totalAmount)}</strong></td></tr></table>
-<p><a href="${escapeHtml(notification.approveUrl)}">Aprovar orçamento</a> | <a href="${escapeHtml(notification.rejectUrl)}">Recusar orçamento</a></p>
-<p><a href="${escapeHtml(notification.trackingLink)}">Acompanhar minha OS</a></p>`,
+<p><a href="${escapeHttpUrl(notification.approveUrl)}">Aprovar orçamento</a> | <a href="${escapeHttpUrl(notification.rejectUrl)}">Recusar orçamento</a></p>
+<p><a href="${escapeHttpUrl(notification.trackingLink)}">Acompanhar minha OS</a></p>`,
   };
 }
