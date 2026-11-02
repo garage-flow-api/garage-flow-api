@@ -3,5 +3,10 @@ kind: ConfigMap
 metadata:
   name: garage-flow-config
 data:
-  NODE_ENV: "production"
-  JWT_EXPIRES_IN: "1d"
+  NODE_ENV: 'production'
+  PORT: '3000'
+  JWT_EXPIRES_IN: '1d'
+  PUBLIC_BASE_URL: 'http://localhost:3000'
+  SMTP_HOST: 'smtp-relay.brevo.com'
+  SMTP_PORT: '587'
+  SMTP_FROM: 'Garage Flow <garageflow.fiap@gmail.com>'

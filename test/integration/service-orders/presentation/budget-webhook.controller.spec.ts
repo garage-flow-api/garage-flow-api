@@ -9,8 +9,10 @@ import { GlobalExceptionFilter } from '@common/filters/global-exception.filter';
 import { JwtAuthGuard } from '@auth/infrastructure/security/jwt-auth.guard';
 import { RolesGuard } from '@auth/infrastructure/security/roles.guard';
 import { JwtStrategy } from '@auth/infrastructure/security/jwt.strategy';
+import { NotificationGateway } from '@notification/application/notification.gateway';
 import { buildSignature } from '@service-orders/infrastructure/security/webhook-signature.util';
 import { truncateAllTables } from '../../../support/truncate-database';
+import { makeFakeNotificationGateway } from '../../../support/fake-notification-gateway';
 
 const WEBHOOK_SECRET = 'test-webhook-secret';
 
@@ -30,7 +32,10 @@ describe('BudgetWebhookController (integration)', () => {
         JwtModule.register({ secret: process.env.JWT_SECRET, signOptions: { expiresIn: '1h' } }),
       ],
       providers: [JwtStrategy, JwtAuthGuard, RolesGuard],
-    }).compile();
+    })
+      .overrideProvider(NotificationGateway)
+      .useValue(makeFakeNotificationGateway())
+      .compile();
 
     app = moduleRef.createNestApplication({ rawBody: true });
     app.useGlobalFilters(new GlobalExceptionFilter());
@@ -200,6 +205,19 @@ describe('BudgetWebhookController (integration)', () => {
 
     expect(response.body).toEqual({ processed: false });
     expect(await statusOf(serviceOrder.id)).toBe('RECEIVED');
+  });
+
+  it('com duas decisões simultâneas, só uma é aplicada', async () => {
+    const serviceOrder = await createServiceOrder();
+
+    const [approved, rejected] = await Promise.all([
+      sendDecision({ serviceOrderId: serviceOrder.id, decision: 'APPROVED' }),
+      sendDecision({ serviceOrderId: serviceOrder.id, decision: 'REJECTED' }),
+    ]);
+
+    const processed = [approved.body.processed, rejected.body.processed];
+    expect(processed.filter(Boolean)).toHaveLength(1);
+    expect(['AWAITING_EXECUTION', 'CANCELED']).toContain(await statusOf(serviceOrder.id));
   });
 
   it('retorna 404 para uma OS inexistente', async () => {

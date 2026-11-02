@@ -28,6 +28,26 @@ variable "tracking_token_secret" {
   sensitive   = true
 }
 
+variable "budget_webhook_secret" {
+  description = "Chave do HMAC que autentica o webhook de decisão do orçamento."
+  type        = string
+  sensitive   = true
+}
+
+variable "smtp_user" {
+  description = "Usuário do servidor SMTP (vazio: sem autenticação)."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "smtp_pass" {
+  description = "Senha do servidor SMTP (vazio: sem autenticação)."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "ingress_namespace" {
   description = "Namespace do Ingress Controller."
   type        = string

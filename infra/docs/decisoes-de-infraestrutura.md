@@ -242,7 +242,7 @@ Não há domínio nem TLS: o acesso é feito pelo IP do Load Balancer.
 **Contexto.** `k8s/secret.yaml` e `k8s/admin-secret.yaml` contêm credenciais versionadas, aceitáveis apenas para demonstração local. A aplicação lê os segredos de variáveis de ambiente vindas de Secrets Kubernetes.
 
 **Decisão.**
-1. O Terraform gera os valores com `random_password`: senha do banco, `JWT_SECRET`, `TRACKING_TOKEN_SECRET` e senha do primeiro administrador. São apenas alfanuméricos, para dispensar URL-encoding na `DATABASE_URL`.
+1. O Terraform gera os valores com `random_password`: senha do banco, `JWT_SECRET`, `TRACKING_TOKEN_SECRET`, `BUDGET_WEBHOOK_SECRET` e senha do primeiro administrador. São apenas alfanuméricos, para dispensar URL-encoding na `DATABASE_URL`.
 2. Os valores são replicados no **Azure Key Vault**, que serve como fonte de consulta para pessoas e integrações. O acesso é controlado por Azure RBAC (ver ADR-15).
 3. O Terraform cria o Secret Kubernetes `garage-flow-secrets` com as mesmas chaves do manifesto.
 4. O Secret `garage-flow-bootstrap-admin` é temporário: o `deploy-app.sh` o cria a partir dos outputs do Terraform logo antes do Job de bootstrap e o remove assim que o Job termina.

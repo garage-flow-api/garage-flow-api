@@ -12,8 +12,8 @@ permissions:
   contents: read
 
 # Só PRs compartilham fila (um push novo cancela o anterior). Fora de PR cada execução tem
-# grupo próprio; a serialização fica nos grupos dos jobs: deploy-staging aqui e infra-staging
-# no infra.yml. Grupos de concorrência valem para o repositório inteiro, não por arquivo.
+# grupo próprio; deploy, provision e destroy compartilham a fila infra-staging nos respectivos
+# jobs. Grupos de concorrência valem para o repositório inteiro, não por arquivo.
 concurrency:
   group: ${{ github.event_name == 'pull_request' && format('ci-cd-pr-{0}', github.event.pull_request.number) || format('ci-cd-run-{0}', github.run_id) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -30,6 +30,7 @@ jobs:
       JWT_SECRET: ci-only
       JWT_EXPIRES_IN: 1h
       TRACKING_TOKEN_SECRET: ci-only
+      BUDGET_WEBHOOK_SECRET: ci-only
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -258,7 +259,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     concurrency:
-      group: deploy-staging
+      # Impede deploy simultâneo com provision/destroy do workflow infra.
+      group: infra-staging
       cancel-in-progress: false
     permissions:
       contents: read
@@ -363,7 +365,7 @@ jobs:
               newTag: "$IMAGE_TAG"
           YAML
           done
-          # O F5 NGINX Ingress Controller rejeita Ingress sem host (spec.rules[0].host: Required value).
+          # Define o host exigido pelo Ingress e a URL pública usada nos links dos e-mails.
           cat >> "$RENDER_DIR/cloud/kustomization.yaml" <<YAML
           patches:
             - target:
@@ -373,6 +375,13 @@ jobs:
                 - op: add
                   path: /spec/rules/0/host
                   value: "$INGRESS_HOST"
+            - target:
+                kind: ConfigMap
+                name: garage-flow-config
+              patch: |-
+                - op: replace
+                  path: /data/PUBLIC_BASE_URL
+                  value: "http://$INGRESS_HOST"
           YAML
 
       # Bloco 3 do deploy-app.sh (run_job). Jobs são imutáveis: remove o anterior, aplica o

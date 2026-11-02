@@ -9,7 +9,9 @@ import { GlobalExceptionFilter } from '@common/filters/global-exception.filter';
 import { JwtAuthGuard } from '@auth/infrastructure/security/jwt-auth.guard';
 import { RolesGuard } from '@auth/infrastructure/security/roles.guard';
 import { JwtStrategy } from '@auth/infrastructure/security/jwt.strategy';
+import { NotificationGateway } from '@notification/application/notification.gateway';
 import { truncateAllTables } from '../../../support/truncate-database';
+import { makeFakeNotificationGateway } from '../../../support/fake-notification-gateway';
 
 describe('ServiceOrdersController (integration)', () => {
   let app: INestApplication;
@@ -34,7 +36,10 @@ describe('ServiceOrdersController (integration)', () => {
         JwtModule.register({ secret: process.env.JWT_SECRET, signOptions: { expiresIn: '1h' } }),
       ],
       providers: [JwtStrategy, JwtAuthGuard, RolesGuard],
-    }).compile();
+    })
+      .overrideProvider(NotificationGateway)
+      .useValue(makeFakeNotificationGateway())
+      .compile();
 
     app = moduleRef.createNestApplication();
     app.useGlobalFilters(new GlobalExceptionFilter());
@@ -655,9 +660,9 @@ describe('ServiceOrdersController (integration)', () => {
       .send(openServiceOrderBody());
     await putServiceOrderInDiagnosis(created.body.id);
     await request(app.getHttpServer())
-      .patch(`/service-orders/${created.body.id}`)
-      .set('Authorization', adminAuthHeader())
-      .send({ status: 'FINISHED_DIAGNOSIS' });
+      .patch(`/service-orders/${created.body.id}/add-services-and-parts`)
+      .set('Authorization', mechanicAuthHeader())
+      .send({ services: [], parts: [] });
 
     const response = await request(app.getHttpServer())
       .patch(`/service-orders/${created.body.id}/budget`)

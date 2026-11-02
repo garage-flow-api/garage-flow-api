@@ -188,6 +188,7 @@ garage-flow-api/
 │   │   ├── auth/
 │   │   ├── client/
 │   │   ├── inventory/
+│   │   ├── notification/
 │   │   ├── service/
 │   │   ├── service-orders/
 │   │   └── vehicle/
@@ -196,6 +197,8 @@ garage-flow-api/
 │   └── main.ts
 ├── prisma/                      # Schema, migrations, seed e bootstrap do admin
 ├── test/                        # Testes unitários e de integração
+├── docs/                        # OpenAPI e collection do Postman
+├── scripts/                     # Geração do OpenAPI e da collection
 ├── k8s/                         # Manifestos Kubernetes
 ├── k6/                          # Teste de carga
 ├── Dockerfile
@@ -211,15 +214,16 @@ garage-flow-api/
 - **Service:** serviços padronizados da oficina, como troca de óleo, alinhamento etc., com preço/tabela de mão de obra.
 - **Inventory:** peças e insumos utilizados nas ordens de serviço, com controle de estoque físico e lógico. O estoque lógico desconta do físico tudo que já está comprometido com ordens de serviço em aberto, evitando que a mesma peça seja reservada duas vezes. Peças com estoque lógico abaixo do mínimo configurado são sinalizadas automaticamente.
 - **Service Orders:** ciclo de vida da ordem de serviço, incluindo recebimento, diagnóstico, adição de serviços/peças, orçamento, aprovação, execução, finalização e entrega. Ao finalizar uma OS, as peças utilizadas são baixadas definitivamente do estoque. Cada OS gera um link público de rastreamento, que permite ao cliente consultar o status sem autenticação.
+- **Notification:** envio de e-mails ao cliente por meio de uma porta (`NotificationGateway`) com adaptador SMTP (Nodemailer). Avisa as mudanças de status da OS e envia o orçamento com links para aprovar ou recusar. Em desenvolvimento, os e-mails são capturados pelo Mailpit.
 
 Além dos contextos de negócio, `common` contém elementos compartilhados pela aplicação (guards, filtros de exceção, pipes, decorators e erros de domínio) e `infra` contém recursos de infraestrutura que não pertencem a um contexto específico (conexão com o banco, health check).
 
 ## Ambientes de execução
 
-| Ambiente | Forma de execução | Configuração |
-| --- | --- | --- |
-| Desenvolvimento | Docker Compose | `docker-compose.development.yaml` e `.env` |
-| Produção | Kubernetes | Manifestos da pasta `k8s/` |
+| Ambiente        | Forma de execução | Configuração                               |
+| --------------- | ----------------- | ------------------------------------------ |
+| Desenvolvimento | Docker Compose    | `docker-compose.development.yaml` e `.env` |
+| Produção        | Kubernetes        | Manifestos da pasta `k8s/`                 |
 
 Não existe um Docker Compose de produção. O estágio `production` do `Dockerfile` gera a imagem enxuta utilizada pelo Deployment da API no Kubernetes.
 
@@ -237,17 +241,50 @@ Crie o arquivo `.env` a partir do `.env.example` e utilize `NODE_ENV=development
 
 ```env
 NODE_ENV=development
+PORT=3000
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/garage-flow?schema=public
 
 # Autenticação (JWT)
 JWT_SECRET=troque-por-um-segredo-forte
 JWT_EXPIRES_IN=1d
 
-# Link público de rastreamento da OS
+# Assinatura dos links públicos e do webhook de orçamento
 TRACKING_TOKEN_SECRET=troque-por-outro-segredo-forte
+BUDGET_WEBHOOK_SECRET=troque-por-um-segredo-do-webhook
+
+# Webhook de decisão do orçamento: chave do HMAC que assina o corpo da requisição
+BUDGET_WEBHOOK_SECRET=troque-por-um-segredo-do-webhook
+
+# URL pública da API, usada nos links enviados por e-mail (acompanhamento e orçamento)
+PUBLIC_BASE_URL=http://localhost:3000
+
+# E-mail (SMTP). Em desenvolvimento, o Mailpit recebe tudo, sem enviar de verdade
+SMTP_HOST=localhost
+SMTP_PORT=1025
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM="Garage Flow <no-reply@garageflow.local>"
 ```
 
+> No Docker Compose, a API usa `SMTP_HOST=mailpit` (nome do serviço), definido no próprio `docker-compose.development.yaml`. `PUBLIC_BASE_URL` deve apontar para o endereço pelo qual o cliente alcança a API, pois é dele que saem os links dos e-mails.
+
 O arquivo `.env` é utilizado pelo Docker Compose e pelos comandos executados localmente. No ambiente de produção, as configurações são fornecidas pelos recursos `ConfigMap` e `Secret` do Kubernetes.
+
+As variáveis lidas pela API são:
+
+| Variável | Origem no Kubernetes | Uso |
+| --- | --- | --- |
+| `NODE_ENV`, `PORT` | `garage-flow-config` | Ambiente e porta HTTP (padrão `3000`) |
+| `DATABASE_URL` | `garage-flow-secrets` | Conexão do Prisma com o PostgreSQL |
+| `JWT_SECRET` | `garage-flow-secrets` | Assinatura dos tokens de autenticação |
+| `JWT_EXPIRES_IN` | `garage-flow-config` | Validade do JWT (padrão da aplicação: `1h`) |
+| `TRACKING_TOKEN_SECRET` | `garage-flow-secrets` | Assinatura dos links públicos de acompanhamento e decisão |
+| `BUDGET_WEBHOOK_SECRET` | `garage-flow-secrets` | HMAC-SHA256 do webhook de decisão do orçamento |
+| `PUBLIC_BASE_URL` | `garage-flow-config` | Base dos links enviados por e-mail; no deploy cloud recebe o host do Ingress |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM` | `garage-flow-config` | Endereço e remetente do servidor de e-mail |
+| `SMTP_USER`, `SMTP_PASS` | `garage-flow-secrets` | Autenticação SMTP; podem ficar vazias para um servidor sem autenticação |
+
+`ADMIN_NAME`, `ADMIN_EMAIL` e `ADMIN_PASSWORD` não são variáveis do processo normal da API: são consumidas somente pelo Job temporário de bootstrap do primeiro administrador.
 
 ### 2. Subir a aplicação
 
@@ -262,6 +299,7 @@ O Docker Compose inicia:
 - PostgreSQL (dados da aplicação);
 - PostgreSQL do SonarQube (`sonar-db`) e o próprio SonarQube (análise de código);
 - API NestJS;
+- Mailpit (servidor SMTP de testes, captura os e-mails enviados pela API);
 - aplicação das migrations e do seed do Prisma.
 
 A API aguarda o PostgreSQL ficar saudável, gera o Prisma Client, executa as migrations e popula o banco com os dados de demonstração antes de iniciar. Os usuários criados pelo seed usam a senha padrão `Password123!`.
@@ -269,8 +307,9 @@ A API aguarda o PostgreSQL ficar saudável, gera o Prisma Client, executa as mig
 ### 3. Acessos
 
 - **API:** `http://localhost:3000`
-- **Swagger:** `http://localhost:3000/docs`
+- **Swagger:** `http://localhost:3000/docs` (JSON OpenAPI em `http://localhost:3000/docs-json`)
 - **SonarQube:** `http://localhost:9000` (usuário/senha padrão `admin`/`admin` no primeiro acesso) - disponível apenas ao subir com `docker-compose.development.yaml`.
+- **Mailpit (caixa de entrada de teste):** `http://localhost:8025`. Todos os e-mails enviados pela API em desenvolvimento aparecem aqui.
 
 ### Prisma Studio
 
@@ -334,20 +373,20 @@ garage-flow-deployment
 
 ### Recursos provisionados
 
-| Manifesto | Recurso criado |
-| --- | --- |
-| `k8s/configmap.yaml` | Variáveis não sensíveis da API |
-| `k8s/secret.yaml` | Credenciais do banco e segredos da aplicação |
-| `k8s/postgres-pvc.yaml` | Volume persistente de 1 GiB para o PostgreSQL |
-| `k8s/postgres-deployment.yaml` | Deployment do PostgreSQL 16 |
-| `k8s/postgres-service.yaml` | Service interno do PostgreSQL |
-| `k8s/migration-job.yaml` | Job responsável por executar `prisma migrate deploy` |
-| `k8s/admin-secret.yaml` | Credenciais temporárias do primeiro administrador |
-| `k8s/bootstrap-admin-job.yaml` | Job que cria o primeiro usuário `ADMIN` |
-| `k8s/deployment.yaml` | Deployment da API com recursos, liveness e readiness probes |
-| `k8s/service.yaml` | Service interno da API |
-| `k8s/hpa.yaml` | Escalabilidade automática por CPU e memória |
-| `k8s/ingress.yaml` | Roteamento HTTP por meio de NGINX Ingress |
+| Manifesto                      | Recurso criado                                              |
+| ------------------------------ | ----------------------------------------------------------- |
+| `k8s/configmap.yaml`           | Variáveis não sensíveis da API                              |
+| `k8s/secret.yaml`              | Credenciais do banco e segredos da aplicação                |
+| `k8s/postgres-pvc.yaml`        | Volume persistente de 1 GiB para o PostgreSQL               |
+| `k8s/postgres-deployment.yaml` | Deployment do PostgreSQL 16                                 |
+| `k8s/postgres-service.yaml`    | Service interno do PostgreSQL                               |
+| `k8s/migration-job.yaml`       | Job responsável por executar `prisma migrate deploy`        |
+| `k8s/admin-secret.yaml`        | Credenciais temporárias do primeiro administrador           |
+| `k8s/bootstrap-admin-job.yaml` | Job que cria o primeiro usuário `ADMIN`                     |
+| `k8s/deployment.yaml`          | Deployment da API com recursos, liveness e readiness probes |
+| `k8s/service.yaml`             | Service interno da API                                      |
+| `k8s/hpa.yaml`                 | Escalabilidade automática por CPU e memória                 |
+| `k8s/ingress.yaml`             | Roteamento HTTP por meio de NGINX Ingress                   |
 
 > Os valores presentes em `k8s/secret.yaml` e `k8s/admin-secret.yaml` são destinados somente ao ambiente local de demonstração. Em uma produção real, utilize um gerenciador de segredos da cloud e não versione credenciais reais no repositório.
 
@@ -632,7 +671,7 @@ Fora da `main` ou sem a confirmação exata, o job falha antes de qualquer acess
 
 - Login na Azure por **OIDC** (credencial federada do service principal `sp-garage-flow-github-actions`, aceita só para a `main`). **Nenhum secret é armazenado no GitHub.**
 - Três **repository variables** (Settings → Secrets and variables → Actions → Variables): `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` e `AZURE_SUBSCRIPTION_ID`. Não são valores sensíveis.
-- Os segredos da aplicação (senha do banco, `JWT_SECRET`, `TRACKING_TOKEN_SECRET`, senha do admin) são gerados pelo Terraform e guardados no Key Vault; os da API viram o Secret `garage-flow-secrets` no cluster. As credenciais do primeiro admin só existem no cluster durante o Job de bootstrap: o deploy cria o Secret a partir dos outputs do Terraform, com a senha mascarada no log, e o apaga em seguida.
+- Os segredos gerados da aplicação (senha do banco, `JWT_SECRET`, `TRACKING_TOKEN_SECRET`, `BUDGET_WEBHOOK_SECRET` e senha do admin) ficam no Key Vault; os segredos usados pela API viram o Secret `garage-flow-secrets` no cluster. `SMTP_USER` e `SMTP_PASS`, quando necessários, são recebidos por `TF_VAR_smtp_user` e `TF_VAR_smtp_pass`, nunca por um `.tfvars` versionado. As credenciais do primeiro admin só existem no cluster durante o Job de bootstrap: o deploy cria o Secret a partir dos outputs do Terraform, com a senha mascarada no log, e o apaga em seguida.
 
 ### Avisos
 
@@ -684,7 +723,7 @@ A resposta traz um `access_token` (JWT), que deve ser enviado no header `Authori
 | **MECHANIC**        | Iniciar diagnóstico, adicionar serviços/peças à OS, iniciar e finalizar a execução do serviço           |
 | **STOCK_CLERK**     | Cadastrar, reabastecer e dar baixa manual em peças; consultar peças com estoque abaixo do mínimo        |
 
-> Consultas de leitura (`GET`) na maioria dos recursos estão disponíveis para qualquer usuário autenticado, independente da role. As exceções (ex.: `GET /inventory/low-stock`) exigem a role MECHANIC. `GET /service-orders/track/:token` e `POST /auth/login` são as únicas rotas públicas, sem necessidade de autenticação.
+> Consultas de leitura (`GET`) na maioria dos recursos estão disponíveis para qualquer usuário autenticado, independente da role. As exceções (ex.: `GET /inventory/low-stock`) exigem a role MECHANIC. `GET /service-orders/track/:token`, `POST /auth/login` e `/budget-decisions/:token` (links dos e-mails de orçamento) são as únicas rotas públicas, sem necessidade de autenticação.
 
 ### 2. Clientes
 
@@ -731,10 +770,24 @@ Esta seção descreve, passo a passo, como percorrer o ciclo de vida completo de
 
 ```bash
 POST /service-orders
-{ "clientCpfCnpj": "529.982.247-25", "licensePlate": "ABC1D23", "description": "Ruído no motor" }
+{
+  "client": {
+    "cpfCnpj": "529.982.247-25",
+    "name": "João da Silva",
+    "phone": "11999998888",
+    "address": "Rua das Flores, 123 - São Paulo/SP",
+    "email": "joao@example.com"
+  },
+  "vehicle": { "licensePlate": "ABC1D23", "brand": "Fiat", "model": "Uno", "year": 2020 },
+  "description": "Ruído no motor",
+  "services": [],
+  "parts": []
+}
 ```
 
-A OS nasce com status `RECEIVED`. A resposta inclui um `trackingLink` - um link público que o cliente pode usar para acompanhar o status sem autenticação (`GET /service-orders/track/:token`) e o `totalAmount` começa zerado.
+O cliente (por CPF/CNPJ) e o veículo (por placa) são reaproveitados quando já existem; caso contrário, são criados na mesma requisição. `services` e `parts` são opcionais.
+
+A OS nasce com status `RECEIVED`. A resposta inclui um `trackingLink` - um link público que o cliente pode usar para acompanhar o status sem autenticação (`GET /service-orders/track/:token`) - e o `totalAmount`, que começa zerado quando a OS é aberta sem serviços nem peças.
 
 #### 6.2 Diagnóstico (`MECHANIC`)
 
@@ -803,17 +856,16 @@ Transiciona a OS para `DELIVERED`, encerrando o ciclo.
 ### 7. Consultas e métricas da OS
 
 ```bash
-GET /service-orders                                 # lista todas as OS
+GET /service-orders                                 # lista as OS abertas, por prioridade
 GET /service-orders/:id                              # detalhes de uma OS
 GET /service-orders/:id/tracking-link                # reobtém o link público de rastreamento
 GET /service-orders/metrics/average-execution-time   # tempo médio de execução das OS finalizadas
 DELETE /service-orders/:id                           # soft delete da OS
 ```
 
-
-
-- **`GET /track/:token`**: consulta pública de status via o token do link de rastreamento, sem necessidade de autenticação.
-- **`GET /metrics/average-execution-time`** (qualquer usuário autenticado): calcula o tempo médio de execução das ordens de serviço com status `FINISHED` ou `DELIVERED`. Aceita filtro opcional por período via query params `from` e `to` (formato `AAAA-MM-DD`); sem os filtros, considera todas as OS concluídas. Retorna:
+- **`GET /service-orders`**: sem filtro, devolve só as OS abertas (`FINISHED`, `DELIVERED` e `CANCELED` ficam de fora), ordenadas por prioridade de status (em execução, aguardando aprovação, em diagnóstico, recebida) e, dentro do mesmo status, da mais antiga para a mais nova. Com `?status=`, devolve as OS desse status (inclusive as encerradas), da mais antiga para a mais nova. `?mechanicId=` filtra pelo mecânico responsável.
+- **`GET /service-orders/track/:token`**: consulta pública de status via o token do link de rastreamento, sem necessidade de autenticação.
+- **`GET /service-orders/metrics/average-execution-time`** (qualquer usuário autenticado): calcula o tempo médio de execução das ordens de serviço com status `FINISHED` ou `DELIVERED`. Aceita filtro opcional por período via query params `from` e `to` (formato `AAAA-MM-DD`); sem os filtros, considera todas as OS concluídas. Retorna:
 
   ```json
   {
@@ -828,6 +880,121 @@ DELETE /service-orders/:id                           # soft delete da OS
   ```bash
   GET /service-orders/metrics/average-execution-time?from=2026-08-01&to=2026-08-31
   ```
+
+### 8. Avisos por e-mail
+
+Quando o status de uma OS muda, o cliente recebe um e-mail com o status atual (no mesmo vocabulário da consulta pública) e o link de acompanhamento. O envio acontece depois que a OS é gravada e **nunca** impede a operação: se o envio falhar, o erro é registrado no log e a OS segue normalmente. Clientes sem e-mail cadastrado são ignorados.
+
+| Evento                                                                            | E-mail enviado                                                |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Abertura da OS                                                                    | Status "Recebida" + link de acompanhamento                    |
+| Início do diagnóstico, aprovação, cancelamento, início e fim da execução, entrega | Status atualizado + link de acompanhamento                    |
+| Geração do orçamento (`AWAITING_APPROVAL`)                                        | Orçamento com itens, total e botões **Aprovar** e **Recusar** |
+
+O e-mail de orçamento traz dois links assinados (HMAC-SHA256, validade de 7 dias, derivados do `TRACKING_TOKEN_SECRET` com um rótulo próprio, de modo que o token do link de acompanhamento não serve para decidir). O fluxo é:
+
+1. `GET /budget-decisions/:token` mostra uma página de confirmação. Ele **não** registra nada, para que antivírus e leitores de e-mail que abrem links automaticamente não decidam pelo cliente.
+2. O botão da página envia `POST /budget-decisions/:token`, que registra a decisão pelo mesmo caso de uso do webhook de orçamento: aprovar leva a OS para `AWAITING_EXECUTION`, recusar a cancela.
+3. A primeira decisão vale. Repetir o link, ou usar o outro, mostra "Decisão já registrada".
+
+Essas rotas retornam HTML e estão documentadas no Swagger (grupo **Budget decisions**).
+
+#### Testando localmente
+
+1. Suba o ambiente (`docker compose -f docker-compose.development.yaml up --build`).
+2. Abra uma OS informando `client.email` e confira o e-mail "Recebida" em `http://localhost:8025`.
+3. Percorra o ciclo (6.2 a 6.4). Ao gerar o orçamento, chega o e-mail com os botões.
+4. Clique em **Aprovar**, confirme na página e veja a OS em `AWAITING_EXECUTION` (e um novo e-mail de status).
+
+Em produção, aponte `SMTP_*` para um provedor real e `PUBLIC_BASE_URL` para o domínio público da API.
+
+### 9. Swagger, collection e webhook
+
+#### Swagger
+
+Com a API no ar, a documentação interativa fica em `http://localhost:3000/docs` e o JSON OpenAPI em `http://localhost:3000/docs-json`. Uma cópia do OpenAPI está em [`docs/openapi.json`](docs/openapi.json).
+
+#### Collection do Postman
+
+A collection com **todos os endpoints** está em [`docs/Garage-Flow-API.postman_collection.json`](docs/Garage-Flow-API.postman_collection.json). Ela foi gerada a partir do OpenAPI.
+
+Como usar:
+
+1. No Postman, use `Import` e selecione o arquivo da collection.
+2. Suba a API (`docker compose -f docker-compose.development.yaml up --build`).
+3. Rode a pasta **00 - Autenticação**. Ela faz login com os quatro perfis do seed (senha `Password123!`) e guarda um token por perfil.
+4. Rode a pasta **01 - Fluxo da OS** em ordem (no Collection Runner funciona direto). Ela percorre o caminho feliz completo: cadastro de serviço e peça, abertura da OS, diagnóstico, orçamento, aprovação, execução, finalização e entrega. Os ids são capturados automaticamente, e os passos do mecânico (5, 6, 9 e 10) já usam o token do mecânico.
+5. A pasta **01b - Caminhos alternativos** tem um caminho por subpasta, e cada um abre a sua própria OS: aprovar pelo webhook (B1), recusar pelo webhook (B2), cancelar a OS (B3) e os links do e-mail (B4, que pede para copiar o token do Mailpit para `decisionToken`).
+6. As pastas **02 - …** trazem todos os endpoints, agrupados por contexto.
+
+Variáveis da collection:
+
+| Variável        | Para que serve                                                                                                                 |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `baseUrl`       | URL da API (padrão `http://localhost:3000`)                                                                                    |
+| `role`          | Perfil usado no `Authorization`: `admin`, `advisor`, `mechanic` ou `stock` (padrão `admin`). Troque para testar cada permissão |
+| `webhookSecret` | Mesmo valor de `BUDGET_WEBHOOK_SECRET` da API                                                                                  |
+| `decisionToken` | Token do link de aprovar/recusar recebido por e-mail (Mailpit em `http://localhost:8025`)                                      |
+
+Os endpoints exclusivos do mecânico (iniciar diagnóstico, adicionar serviços e peças, iniciar e finalizar a execução) já vêm configurados com o token do mecânico; os demais usam o perfil da variável `role` (padrão `admin`). Veja a tabela de permissões na seção 1.
+
+Para atualizar os arquivos de `docs/` depois de mudar endpoints ou DTOs, com a API no ar:
+
+```bash
+npm run docs:openapi       # baixa o OpenAPI de /docs-json para docs/openapi.json
+npm run docs:collection    # gera a collection do Postman a partir do docs/openapi.json
+```
+
+#### Webhook de decisão do orçamento
+
+`POST /webhooks/budget-decision` recebe a aprovação ou a recusa de um orçamento por um sistema externo. Ele não usa JWT: a chamada é autenticada por uma assinatura HMAC do corpo.
+
+- **Header:** `X-Signature: sha256=<hex>`
+- **Cálculo:** HMAC-SHA256 do **corpo bruto** da requisição, com a chave `BUDGET_WEBHOOK_SECRET`.
+- **Corpo:**
+
+```json
+{
+  "serviceOrderId": "3f6c1c0e-8c2e-4a8e-9b53-2f1f6a0d1c11",
+  "decision": "APPROVED"
+}
+```
+
+`decision` aceita `APPROVED` ou `REJECTED`. Aprovar leva a OS para `AWAITING_EXECUTION`; recusar cancela a OS e libera as peças reservadas.
+
+Exemplo de assinatura em Node.js:
+
+```js
+const { createHmac } = require('crypto');
+
+const body = JSON.stringify({ serviceOrderId: '...', decision: 'APPROVED' });
+const signature =
+  'sha256=' + createHmac('sha256', process.env.BUDGET_WEBHOOK_SECRET).update(body).digest('hex');
+```
+
+Exemplo com `openssl` (a saída já sai no formato do header, `sha256=<hex>`):
+
+```bash
+BODY='{"serviceOrderId":"...","decision":"APPROVED"}'
+SIGNATURE=$(printf %s "$BODY" | openssl dgst -sha256 -hmac "$BUDGET_WEBHOOK_SECRET" | sed 's/^.*= /sha256=/')
+
+curl -X POST http://localhost:3000/webhooks/budget-decision \
+  -H "Content-Type: application/json" \
+  -H "X-Signature: $SIGNATURE" \
+  -d "$BODY"
+```
+
+Respostas:
+
+| Status                       | Quando                                                                              |
+| ---------------------------- | ----------------------------------------------------------------------------------- |
+| `200` `{"processed": true}`  | Decisão aplicada                                                                    |
+| `200` `{"processed": false}` | Decisão ignorada: a OS não está mais aguardando aprovação (a primeira decisão vale) |
+| `400`                        | Corpo inválido                                                                      |
+| `401`                        | Assinatura ausente ou inválida (ou `BUDGET_WEBHOOK_SECRET` não configurado)         |
+| `404`                        | OS não encontrada                                                                   |
+
+Na collection, o pré-request do webhook calcula o `X-Signature` sozinho a partir da variável `webhookSecret`.
 
 ## Validações
 
@@ -880,8 +1047,16 @@ Os testes de integração rodam de forma sequencial (`--runInBand`), já que com
 
 A organização por contexto facilita a localização e manutenção dos testes, sem limitar um teste de integração a apenas um contexto.
 
+O ciclo de vida da OS (abertura, aprovação e recusa, listagem priorizada, transições de status, baixa de estoque, e-mails e links de decisão) é coberto de ponta a ponta em `test/integration/service-orders/presentation/service-orders.lifecycle.spec.ts`.
+
 Para rodar todos os testes (é necessário o docker rodando para os testes de integração):
 
 ```bash
 npm run test
+```
+
+Para gerar o relatório de cobertura:
+
+```bash
+npm run test:cov
 ```

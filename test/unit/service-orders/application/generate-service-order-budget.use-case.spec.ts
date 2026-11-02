@@ -1,6 +1,8 @@
 import { BusinessRuleError, NotFoundError } from '@common/errors/domain.error';
 
 import { GenerateServiceOrderBudgetUseCase } from '@service-orders/application/use-cases/generate-service-order-budget.use-case';
+import { BuildServiceOrderBudgetUseCase } from '@service-orders/application/use-cases/build-service-order-budget.use-case';
+import { type NotifyServiceOrderStatusChangeUseCase } from '@service-orders/application/use-cases/notify-service-order-status-change.use-case';
 import { ServiceOrderStatus } from '@service-orders/domain/value-objects/service-order-status.vo';
 import { ServiceEntity } from '@service/domain/entities/service.entity';
 import { ServicePrice } from '@service/domain/value-objects/service-price.value-object';
@@ -25,6 +27,7 @@ describe('GenerateServiceOrderBudgetUseCase', () => {
   let findClientById: { execute: jest.Mock };
   let findServicesByIdList: { execute: jest.Mock };
   let findPartsByIdList: { execute: jest.Mock };
+  let notifyStatusChange: { execute: jest.Mock };
   let useCase: GenerateServiceOrderBudgetUseCase;
 
   const FIXED_DATE = new Date('2026-01-01T00:00:00.000Z');
@@ -62,13 +65,19 @@ describe('GenerateServiceOrderBudgetUseCase', () => {
     findClientById = { execute: jest.fn().mockResolvedValue(client) };
     findServicesByIdList = { execute: jest.fn().mockResolvedValue([service]) };
     findPartsByIdList = { execute: jest.fn().mockResolvedValue([part]) };
+    notifyStatusChange = { execute: jest.fn().mockResolvedValue(undefined) };
 
-    useCase = new GenerateServiceOrderBudgetUseCase(
-      repository,
+    const buildBudget = new BuildServiceOrderBudgetUseCase(
       findVehicleById as unknown as FindVehicleByIdUseCase,
       findClientById as unknown as FindClientByIdUseCase,
       findServicesByIdList as unknown as FindServicesByIdListUseCase,
       findPartsByIdList as unknown as FindPartsByIdListUseCase,
+    );
+
+    useCase = new GenerateServiceOrderBudgetUseCase(
+      repository,
+      buildBudget,
+      notifyStatusChange as unknown as NotifyServiceOrderStatusChangeUseCase,
     );
   });
 
@@ -87,6 +96,8 @@ describe('GenerateServiceOrderBudgetUseCase', () => {
     expect(budget.status).toBe(ServiceOrderStatus.AWAITING_APPROVAL);
     expect(serviceOrder.status).toBe(ServiceOrderStatus.AWAITING_APPROVAL);
     expect(repository.save).toHaveBeenCalledWith(serviceOrder);
+    expect(notifyStatusChange.execute).toHaveBeenCalledTimes(1);
+    expect(notifyStatusChange.execute).toHaveBeenCalledWith(serviceOrder);
     expect(budget.totalAmount).toBe(130);
     expect(budget.client).toEqual({
       name: 'João da Silva',
@@ -128,6 +139,7 @@ describe('GenerateServiceOrderBudgetUseCase', () => {
 
     expect(budget.status).toBe(ServiceOrderStatus.AWAITING_APPROVAL);
     expect(repository.save).not.toHaveBeenCalled();
+    expect(notifyStatusChange.execute).not.toHaveBeenCalled();
   });
 
   it('deve recuperar o orçamento sem alterar o status após a aprovação', async () => {
@@ -139,6 +151,19 @@ describe('GenerateServiceOrderBudgetUseCase', () => {
     expect(budget.status).toBe(ServiceOrderStatus.IN_EXECUTION);
     expect(serviceOrder.status).toBe(ServiceOrderStatus.IN_EXECUTION);
     expect(repository.save).not.toHaveBeenCalled();
+    expect(notifyStatusChange.execute).not.toHaveBeenCalled();
+  });
+
+  it('não deve salvar nem notificar se a montagem do orçamento falhar', async () => {
+    const serviceOrder = buildServiceOrder();
+    repository.findById.mockResolvedValue(serviceOrder);
+    findPartsByIdList.execute.mockResolvedValue([]);
+
+    await expect(useCase.execute(serviceOrder.id)).rejects.toThrow(NotFoundError);
+
+    expect(repository.save).not.toHaveBeenCalled();
+    expect(notifyStatusChange.execute).not.toHaveBeenCalled();
+    expect(serviceOrder.status).toBe(ServiceOrderStatus.FINISHED_DIAGNOSIS);
   });
 
   it('não deve buscar peças quando a OS não possui itens de peça', async () => {

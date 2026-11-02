@@ -6,6 +6,9 @@
     "outDir": "./dist",
     "baseUrl": "./",
     "paths": {
+      "@notification/*": [
+        "src/modules/notification/*"
+      ],
       "@common/*": [
         "src/common/*"
       ],

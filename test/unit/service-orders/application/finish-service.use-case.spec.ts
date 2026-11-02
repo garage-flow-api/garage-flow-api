@@ -1,5 +1,6 @@
 import { type WriteOffPartsUseCase } from '@inventory/application/use-cases/write-off-parts.use-case';
 import { FinishServiceUseCase } from '@service-orders/application/use-cases/finish-service.use-case';
+import { type NotifyServiceOrderStatusChangeUseCase } from '@service-orders/application/use-cases/notify-service-order-status-change.use-case';
 import { type PartItem } from '@service-orders/domain/entities/part-item.entity';
 import { type ServiceOrderRepository } from '@service-orders/domain/repositories/service-order.repository';
 import { ServiceOrderStatus } from '@service-orders/domain/value-objects/service-order-status.vo';
@@ -12,9 +13,11 @@ describe('FinishServiceUseCase', () => {
     save: jest.fn(),
   } as unknown as jest.Mocked<ServiceOrderRepository>;
   const writeOffParts = { execute: jest.fn().mockResolvedValue([]) };
+  const notifyStatusChange = { execute: jest.fn().mockResolvedValue(undefined) };
   const useCase = new FinishServiceUseCase(
     repository,
     writeOffParts as unknown as WriteOffPartsUseCase,
+    notifyStatusChange as unknown as NotifyServiceOrderStatusChangeUseCase,
   );
 
   const makeOrder = (
@@ -48,6 +51,10 @@ describe('FinishServiceUseCase', () => {
     expect(writeOffParts.execute.mock.invocationCallOrder[0]).toBeLessThan(
       repository.save.mock.invocationCallOrder[0],
     );
+    expect(notifyStatusChange.execute).toHaveBeenCalledWith(order);
+    expect(repository.save.mock.invocationCallOrder[0]).toBeLessThan(
+      notifyStatusChange.execute.mock.invocationCallOrder[0],
+    );
   });
 
   it('rejects a mechanic who is not assigned to the order', async () => {
@@ -57,6 +64,7 @@ describe('FinishServiceUseCase', () => {
     await expect(useCase.execute(order.id, 'mechanic-2')).rejects.toThrow(DomainError);
     expect(writeOffParts.execute).not.toHaveBeenCalled();
     expect(repository.save).not.toHaveBeenCalled();
+    expect(notifyStatusChange.execute).not.toHaveBeenCalled();
   });
 
   it('rejects an order that is not in execution', async () => {
@@ -66,6 +74,7 @@ describe('FinishServiceUseCase', () => {
     await expect(useCase.execute(order.id, 'mechanic-1')).rejects.toThrow(DomainError);
     expect(writeOffParts.execute).not.toHaveBeenCalled();
     expect(repository.save).not.toHaveBeenCalled();
+    expect(notifyStatusChange.execute).not.toHaveBeenCalled();
   });
 
   it('returns not found when the order does not exist', async () => {
@@ -73,5 +82,6 @@ describe('FinishServiceUseCase', () => {
 
     await expect(useCase.execute('missing-order', 'mechanic-1')).rejects.toThrow(NotFoundError);
     expect(writeOffParts.execute).not.toHaveBeenCalled();
+    expect(notifyStatusChange.execute).not.toHaveBeenCalled();
   });
 });

@@ -57,6 +57,10 @@ export class PrismaServiceOrderRepository implements ServiceOrderRepository {
     return ServiceOrderMapper.toDomain(raw);
   }
 
+  async lockForUpdate(id: string): Promise<void> {
+    await this.db.$queryRaw`SELECT "id" FROM "service_orders" WHERE "id" = ${id} FOR UPDATE`;
+  }
+
   async findAll(
     status?: ServiceOrderStatus,
     mechanicId?: string,
