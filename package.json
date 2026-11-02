@@ -25,7 +25,9 @@
     "test:watch": "jest --watch --setupFiles dotenv/config --runInBand",
     "test:cov": "jest --coverage --setupFiles dotenv/config --runInBand",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "prepare": "husky"
+    "prepare": "husky",
+    "docs:openapi": "node scripts/export-openapi.js",
+    "docs:collection": "node scripts/generate-postman-collection.js"
   },
   "dependencies": {
     "@nestjs/common": "^11.2.7",
