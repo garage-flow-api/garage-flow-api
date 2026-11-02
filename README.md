@@ -84,6 +84,8 @@ garage-flow-api/
 │   └── main.ts
 ├── prisma/                      # Schema, migrations, seed e bootstrap do admin
 ├── test/                        # Testes unitários e de integração
+├── docs/                        # OpenAPI e collection do Postman
+├── scripts/                     # Geração do OpenAPI e da collection
 ├── k8s/                         # Manifestos Kubernetes
 ├── k6/                          # Teste de carga
 ├── Dockerfile
@@ -777,8 +779,9 @@ Como usar:
 1. No Postman, use `Import` e selecione o arquivo da collection.
 2. Suba a API (`docker compose -f docker-compose.development.yaml up --build`).
 3. Rode a pasta **00 - Autenticação**. Ela faz login com os quatro perfis do seed (senha `Password123!`) e guarda um token por perfil.
-4. Rode a pasta **01 - Fluxo da OS** em ordem. Ela percorre o ciclo completo (cadastro de serviço e peça, abertura da OS, diagnóstico, orçamento, aprovação, execução, finalização e entrega) e captura os ids automaticamente.
-5. As pastas **02 - …** trazem todos os endpoints, agrupados por contexto.
+4. Rode a pasta **01 - Fluxo da OS** em ordem (no Collection Runner funciona direto). Ela percorre o caminho feliz completo: cadastro de serviço e peça, abertura da OS, diagnóstico, orçamento, aprovação, execução, finalização e entrega. Os ids são capturados automaticamente, e os passos do mecânico (5, 6, 9 e 10) já usam o token do mecânico.
+5. A pasta **01b - Caminhos alternativos** tem um caminho por subpasta, e cada um abre a sua própria OS: aprovar pelo webhook (B1), recusar pelo webhook (B2), cancelar a OS (B3) e os links do e-mail (B4, que pede para copiar o token do Mailpit para `decisionToken`).
+6. As pastas **02 - …** trazem todos os endpoints, agrupados por contexto.
 
 Variáveis da collection:
 
@@ -789,7 +792,14 @@ Variáveis da collection:
 | `webhookSecret` | Mesmo valor de `BUDGET_WEBHOOK_SECRET` da API                                                                                  |
 | `decisionToken` | Token do link de aprovar/recusar recebido por e-mail (Mailpit em `http://localhost:8025`)                                      |
 
-Os passos exclusivos do mecânico (iniciar diagnóstico, adicionar serviços e peças, iniciar e finalizar a execução) exigem `role = mechanic`; os demais passos do fluxo funcionam com `admin`. Veja a tabela de permissões na seção 1.
+Os endpoints exclusivos do mecânico (iniciar diagnóstico, adicionar serviços e peças, iniciar e finalizar a execução) já vêm configurados com o token do mecânico; os demais usam o perfil da variável `role` (padrão `admin`). Veja a tabela de permissões na seção 1.
+
+Para atualizar os arquivos de `docs/` depois de mudar endpoints ou DTOs, com a API no ar:
+
+```bash
+npm run docs:openapi       # baixa o OpenAPI de /docs-json para docs/openapi.json
+npm run docs:collection    # gera a collection do Postman a partir do docs/openapi.json
+```
 
 #### Webhook de decisão do orçamento
 
@@ -818,11 +828,16 @@ const signature =
   'sha256=' + createHmac('sha256', process.env.BUDGET_WEBHOOK_SECRET).update(body).digest('hex');
 ```
 
-Exemplo com `openssl`:
+Exemplo com `openssl` (a saída já sai no formato do header, `sha256=<hex>`):
 
 ```bash
-echo -n '{"serviceOrderId":"...","decision":"APPROVED"}' \
-  | openssl dgst -sha256 -hmac "$BUDGET_WEBHOOK_SECRET"
+BODY='{"serviceOrderId":"...","decision":"APPROVED"}'
+SIGNATURE=$(printf %s "$BODY" | openssl dgst -sha256 -hmac "$BUDGET_WEBHOOK_SECRET" | sed 's/^.*= /sha256=/')
+
+curl -X POST http://localhost:3000/webhooks/budget-decision \
+  -H "Content-Type: application/json" \
+  -H "X-Signature: $SIGNATURE" \
+  -d "$BODY"
 ```
 
 Respostas:

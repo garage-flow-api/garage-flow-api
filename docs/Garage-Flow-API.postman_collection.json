@@ -150,8 +150,13 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "login"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
             },
             "description": "",
             "body": {
@@ -192,8 +197,13 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "login"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
             },
             "description": "",
             "body": {
@@ -234,8 +244,13 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "login"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
             },
             "description": "",
             "body": {
@@ -276,8 +291,13 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "login"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
             },
             "description": "",
             "body": {
@@ -323,8 +343,12 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/services",
-              "host": ["{{baseUrl}}"],
-              "path": ["services"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "services"
+              ]
             },
             "description": "",
             "body": {
@@ -362,8 +386,12 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/inventory",
-              "host": ["{{baseUrl}}"],
-              "path": ["inventory"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "inventory"
+              ]
             },
             "description": "",
             "body": {
@@ -405,8 +433,12 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/service-orders",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-orders"
+              ]
             },
             "description": "",
             "body": {
@@ -427,7 +459,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test(\"status 200\",()=>pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test(\"status 200\",()=>pm.response.to.have.status(200));"
+                ]
               }
             }
           ],
@@ -436,8 +470,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/service-orders/track/{{trackingToken}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders", "track", "{{trackingToken}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-orders",
+                "track",
+                "{{trackingToken}}"
+              ]
             },
             "description": "",
             "auth": {
@@ -446,13 +486,15 @@
           }
         },
         {
-          "name": "5. Iniciar diagnóstico",
+          "name": "5. Iniciar diagnóstico (mecânico)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test(\"status 200\",()=>pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test(\"status 200\",()=>pm.response.to.have.status(200));"
+                ]
               }
             }
           ],
@@ -461,20 +503,38 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/start-diagnosis",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders", "{{serviceOrderId}}", "start-diagnosis"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-orders",
+                "{{serviceOrderId}}",
+                "start-diagnosis"
+              ]
             },
-            "description": ""
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_mechanic}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         },
         {
-          "name": "6. Adicionar serviços e peças",
+          "name": "6. Adicionar serviços e peças (mecânico)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test(\"status 200\",()=>pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test(\"status 200\",()=>pm.response.to.have.status(200));"
+                ]
               }
             }
           ],
@@ -488,8 +548,14 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/add-services-and-parts",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders", "{{serviceOrderId}}", "add-services-and-parts"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-orders",
+                "{{serviceOrderId}}",
+                "add-services-and-parts"
+              ]
             },
             "description": "",
             "body": {
@@ -500,6 +566,16 @@
                   "language": "json"
                 }
               }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_mechanic}}",
+                  "type": "string"
+                }
+              ]
             }
           }
         },
@@ -510,7 +586,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test(\"status 200\",()=>pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test(\"status 200\",()=>pm.response.to.have.status(200));"
+                ]
               }
             }
           ],
@@ -519,20 +597,28 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/budget",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders", "{{serviceOrderId}}", "budget"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-orders",
+                "{{serviceOrderId}}",
+                "budget"
+              ]
             },
             "description": ""
           }
         },
         {
-          "name": "8a. Aprovar orçamento (staff)",
+          "name": "8. Aprovar orçamento",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test(\"status 200\",()=>pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test(\"status 200\",()=>pm.response.to.have.status(200));"
+                ]
               }
             }
           ],
@@ -541,168 +627,28 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/approve-budget",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders", "{{serviceOrderId}}", "approve-budget"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-orders",
+                "{{serviceOrderId}}",
+                "approve-budget"
+              ]
             },
             "description": ""
           }
         },
         {
-          "name": "8b. Webhook: decisão APPROVED (assinado)",
+          "name": "9. Iniciar execução (mecânico)",
           "event": [
             {
-              "listen": "prerequest",
+              "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "// Assina o corpo EXATO enviado: X-Signature = sha256=<HMAC-SHA256(body, BUDGET_WEBHOOK_SECRET)>",
-                  "const secret = pm.collectionVariables.get(\"webhookSecret\");",
-                  "const body = pm.variables.replaceIn(pm.request.body.raw);",
-                  "pm.request.body.update({mode:\"raw\", raw: body, options:{raw:{language:\"json\"}}});",
-                  "const hex = CryptoJS.HmacSHA256(body, secret).toString(CryptoJS.enc.Hex);",
-                  "pm.variables.set(\"webhookSignature\", \"sha256=\" + hex);"
+                  "pm.test(\"status 200\",()=>pm.response.to.have.status(200));"
                 ]
-              }
-            },
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": ["pm.test(\"status 200\",()=>pm.response.to.have.status(200));"]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Signature",
-                "value": "{{webhookSignature}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/webhooks/budget-decision",
-              "host": ["{{baseUrl}}"],
-              "path": ["webhooks", "budget-decision"]
-            },
-            "description": "Use no lugar do 8a. O script de pré-request calcula X-Signature com o segredo da variável webhookSecret (mesmo valor de BUDGET_WEBHOOK_SECRET da API).",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"serviceOrderId\": \"{{serviceOrderId}}\",\n  \"decision\": \"APPROVED\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "auth": {
-              "type": "noauth"
-            }
-          }
-        },
-        {
-          "name": "8b. Webhook: decisão REJECTED (assinado)",
-          "event": [
-            {
-              "listen": "prerequest",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "// Assina o corpo EXATO enviado: X-Signature = sha256=<HMAC-SHA256(body, BUDGET_WEBHOOK_SECRET)>",
-                  "const secret = pm.collectionVariables.get(\"webhookSecret\");",
-                  "const body = pm.variables.replaceIn(pm.request.body.raw);",
-                  "pm.request.body.update({mode:\"raw\", raw: body, options:{raw:{language:\"json\"}}});",
-                  "const hex = CryptoJS.HmacSHA256(body, secret).toString(CryptoJS.enc.Hex);",
-                  "pm.variables.set(\"webhookSignature\", \"sha256=\" + hex);"
-                ]
-              }
-            },
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": ["pm.test(\"status 200\",()=>pm.response.to.have.status(200));"]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Signature",
-                "value": "{{webhookSignature}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/webhooks/budget-decision",
-              "host": ["{{baseUrl}}"],
-              "path": ["webhooks", "budget-decision"]
-            },
-            "description": "Use no lugar do 8a. O script de pré-request calcula X-Signature com o segredo da variável webhookSecret (mesmo valor de BUDGET_WEBHOOK_SECRET da API).",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"serviceOrderId\": \"{{serviceOrderId}}\",\n  \"decision\": \"REJECTED\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "auth": {
-              "type": "noauth"
-            }
-          }
-        },
-        {
-          "name": "8c. Link do e-mail: abrir confirmação (GET)",
-          "event": [],
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/budget-decisions/{{decisionToken}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["budget-decisions", "{{decisionToken}}"]
-            },
-            "description": "Cole em decisionToken o token do link recebido no Mailpit (http://localhost:8025). O GET só mostra a confirmação, não altera a OS.",
-            "auth": {
-              "type": "noauth"
-            }
-          }
-        },
-        {
-          "name": "8d. Link do e-mail: confirmar decisão (POST)",
-          "event": [],
-          "request": {
-            "method": "POST",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/budget-decisions/{{decisionToken}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["budget-decisions", "{{decisionToken}}"]
-            },
-            "description": "",
-            "auth": {
-              "type": "noauth"
-            }
-          }
-        },
-        {
-          "name": "9. Iniciar execução",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": ["pm.test(\"status 200\",()=>pm.response.to.have.status(200));"]
               }
             }
           ],
@@ -711,20 +657,38 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/start-service",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders", "{{serviceOrderId}}", "start-service"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-orders",
+                "{{serviceOrderId}}",
+                "start-service"
+              ]
             },
-            "description": ""
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_mechanic}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         },
         {
-          "name": "10. Finalizar serviço (baixa o estoque)",
+          "name": "10. Finalizar serviço (mecânico, baixa o estoque)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test(\"status 200\",()=>pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test(\"status 200\",()=>pm.response.to.have.status(200));"
+                ]
               }
             }
           ],
@@ -733,10 +697,26 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/finish-service",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders", "{{serviceOrderId}}", "finish-service"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-orders",
+                "{{serviceOrderId}}",
+                "finish-service"
+              ]
             },
-            "description": ""
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_mechanic}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         },
         {
@@ -746,7 +726,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test(\"status 200\",()=>pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test(\"status 200\",()=>pm.response.to.have.status(200));"
+                ]
               }
             }
           ],
@@ -755,42 +737,28 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/deliver",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders", "{{serviceOrderId}}", "deliver"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-orders",
+                "{{serviceOrderId}}",
+                "deliver"
+              ]
             },
             "description": ""
           }
         },
         {
-          "name": "12. Cancelar OS (alternativa)",
+          "name": "12. Link de acompanhamento",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test(\"status 200\",()=>pm.response.to.have.status(200));"]
-              }
-            }
-          ],
-          "request": {
-            "method": "PATCH",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/cancel-service",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders", "{{serviceOrderId}}", "cancel-service"]
-            },
-            "description": ""
-          }
-        },
-        {
-          "name": "13. Link de acompanhamento",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": ["pm.test(\"status 200\",()=>pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test(\"status 200\",()=>pm.response.to.have.status(200));"
+                ]
               }
             }
           ],
@@ -799,25 +767,834 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/tracking-link",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders", "{{serviceOrderId}}", "tracking-link"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-orders",
+                "{{serviceOrderId}}",
+                "tracking-link"
+              ]
             },
             "description": ""
           }
         },
         {
-          "name": "14. Listar OS abertas por prioridade",
-          "event": [],
+          "name": "13. Listar OS abertas por prioridade",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\",()=>pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/service-orders",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-orders"
+              ]
             },
             "description": ""
           }
+        }
+      ]
+    },
+    {
+      "name": "01b - Caminhos alternativos",
+      "item": [
+        {
+          "name": "B1 - Aprovar pelo webhook",
+          "item": [
+            {
+              "name": "B1.1 Abrir OS",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OS criada (201)\",()=>pm.response.to.have.status(201));",
+                      "const j=pm.response.json();",
+                      "pm.collectionVariables.set(\"serviceOrderId\", j.id);",
+                      "pm.collectionVariables.set(\"clientId\", j.clientId || pm.collectionVariables.get(\"clientId\"));",
+                      "pm.collectionVariables.set(\"vehicleId\", j.vehicleId);",
+                      "if(j.trackingLink){pm.collectionVariables.set(\"trackingToken\", j.trackingLink.split(\"/\").pop());}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/service-orders",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "service-orders"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"client\": {\n    \"cpfCnpj\": \"529.982.247-25\",\n    \"name\": \"João da Silva\",\n    \"phone\": \"11999998888\",\n    \"address\": \"Rua das Flores, 123 - São Paulo/SP\",\n    \"email\": \"joao@example.com\"\n  },\n  \"vehicle\": {\n    \"licensePlate\": \"ABC1D23\",\n    \"brand\": \"Fiat\",\n    \"model\": \"Uno\",\n    \"year\": 2020\n  },\n  \"description\": \"Barulho ao frear e vibração no volante\",\n  \"services\": [\n    {\n      \"serviceId\": \"{{serviceId}}\"\n    }\n  ],\n  \"parts\": [\n    {\n      \"inventoryId\": \"{{partId}}\",\n      \"quantity\": 1\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "B1.2 Iniciar diagnóstico (mecânico)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status 200\",()=>pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/start-diagnosis",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "service-orders",
+                    "{{serviceOrderId}}",
+                    "start-diagnosis"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token_mechanic}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "B1.3 Adicionar serviços e peças (mecânico)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status 200\",()=>pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/add-services-and-parts",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "service-orders",
+                    "{{serviceOrderId}}",
+                    "add-services-and-parts"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"services\": [\n    {\n      \"serviceId\": \"{{serviceId}}\"\n    }\n  ],\n  \"parts\": [\n    {\n      \"inventoryId\": \"{{partId}}\",\n      \"quantity\": 1\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token_mechanic}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "B1.4 Gerar orçamento (e-mail com links)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status 200\",()=>pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/budget",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "service-orders",
+                    "{{serviceOrderId}}",
+                    "budget"
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "B1.5 Webhook: APPROVED (assinado)",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// Assina o corpo EXATO enviado: X-Signature = sha256=<HMAC-SHA256(body, BUDGET_WEBHOOK_SECRET)>",
+                      "const secret = pm.collectionVariables.get(\"webhookSecret\");",
+                      "const body = pm.variables.replaceIn(pm.request.body.raw);",
+                      "pm.request.body.update({mode:\"raw\", raw: body, options:{raw:{language:\"json\"}}});",
+                      "const hex = CryptoJS.HmacSHA256(body, secret).toString(CryptoJS.enc.Hex);",
+                      "pm.variables.set(\"webhookSignature\", \"sha256=\" + hex);"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status 200\",()=>pm.response.to.have.status(200));",
+                      "pm.test(\"decisão processada\",()=>pm.expect(pm.response.json().processed).to.eql(true));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Signature",
+                    "value": "{{webhookSignature}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/webhooks/budget-decision",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "webhooks",
+                    "budget-decision"
+                  ]
+                },
+                "description": "O pré-request calcula X-Signature com a variável webhookSecret (mesmo valor de BUDGET_WEBHOOK_SECRET da API).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"serviceOrderId\": \"{{serviceOrderId}}\",\n  \"decision\": \"APPROVED\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "noauth"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "B2 - Recusar pelo webhook",
+          "item": [
+            {
+              "name": "B2.1 Abrir OS",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OS criada (201)\",()=>pm.response.to.have.status(201));",
+                      "const j=pm.response.json();",
+                      "pm.collectionVariables.set(\"serviceOrderId\", j.id);",
+                      "pm.collectionVariables.set(\"clientId\", j.clientId || pm.collectionVariables.get(\"clientId\"));",
+                      "pm.collectionVariables.set(\"vehicleId\", j.vehicleId);",
+                      "if(j.trackingLink){pm.collectionVariables.set(\"trackingToken\", j.trackingLink.split(\"/\").pop());}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/service-orders",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "service-orders"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"client\": {\n    \"cpfCnpj\": \"529.982.247-25\",\n    \"name\": \"João da Silva\",\n    \"phone\": \"11999998888\",\n    \"address\": \"Rua das Flores, 123 - São Paulo/SP\",\n    \"email\": \"joao@example.com\"\n  },\n  \"vehicle\": {\n    \"licensePlate\": \"ABC1D23\",\n    \"brand\": \"Fiat\",\n    \"model\": \"Uno\",\n    \"year\": 2020\n  },\n  \"description\": \"Barulho ao frear e vibração no volante\",\n  \"services\": [\n    {\n      \"serviceId\": \"{{serviceId}}\"\n    }\n  ],\n  \"parts\": [\n    {\n      \"inventoryId\": \"{{partId}}\",\n      \"quantity\": 1\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "B2.2 Iniciar diagnóstico (mecânico)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status 200\",()=>pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/start-diagnosis",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "service-orders",
+                    "{{serviceOrderId}}",
+                    "start-diagnosis"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token_mechanic}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "B2.3 Adicionar serviços e peças (mecânico)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status 200\",()=>pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/add-services-and-parts",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "service-orders",
+                    "{{serviceOrderId}}",
+                    "add-services-and-parts"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"services\": [\n    {\n      \"serviceId\": \"{{serviceId}}\"\n    }\n  ],\n  \"parts\": [\n    {\n      \"inventoryId\": \"{{partId}}\",\n      \"quantity\": 1\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token_mechanic}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "B2.4 Gerar orçamento (e-mail com links)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status 200\",()=>pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/budget",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "service-orders",
+                    "{{serviceOrderId}}",
+                    "budget"
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "B2.5 Webhook: REJECTED (assinado)",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// Assina o corpo EXATO enviado: X-Signature = sha256=<HMAC-SHA256(body, BUDGET_WEBHOOK_SECRET)>",
+                      "const secret = pm.collectionVariables.get(\"webhookSecret\");",
+                      "const body = pm.variables.replaceIn(pm.request.body.raw);",
+                      "pm.request.body.update({mode:\"raw\", raw: body, options:{raw:{language:\"json\"}}});",
+                      "const hex = CryptoJS.HmacSHA256(body, secret).toString(CryptoJS.enc.Hex);",
+                      "pm.variables.set(\"webhookSignature\", \"sha256=\" + hex);"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status 200\",()=>pm.response.to.have.status(200));",
+                      "pm.test(\"decisão processada\",()=>pm.expect(pm.response.json().processed).to.eql(true));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Signature",
+                    "value": "{{webhookSignature}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/webhooks/budget-decision",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "webhooks",
+                    "budget-decision"
+                  ]
+                },
+                "description": "O pré-request calcula X-Signature com a variável webhookSecret (mesmo valor de BUDGET_WEBHOOK_SECRET da API).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"serviceOrderId\": \"{{serviceOrderId}}\",\n  \"decision\": \"REJECTED\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "noauth"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "B3 - Cancelar a OS",
+          "item": [
+            {
+              "name": "B3.1 Abrir OS",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OS criada (201)\",()=>pm.response.to.have.status(201));",
+                      "const j=pm.response.json();",
+                      "pm.collectionVariables.set(\"serviceOrderId\", j.id);",
+                      "pm.collectionVariables.set(\"clientId\", j.clientId || pm.collectionVariables.get(\"clientId\"));",
+                      "pm.collectionVariables.set(\"vehicleId\", j.vehicleId);",
+                      "if(j.trackingLink){pm.collectionVariables.set(\"trackingToken\", j.trackingLink.split(\"/\").pop());}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/service-orders",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "service-orders"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"client\": {\n    \"cpfCnpj\": \"529.982.247-25\",\n    \"name\": \"João da Silva\",\n    \"phone\": \"11999998888\",\n    \"address\": \"Rua das Flores, 123 - São Paulo/SP\",\n    \"email\": \"joao@example.com\"\n  },\n  \"vehicle\": {\n    \"licensePlate\": \"ABC1D23\",\n    \"brand\": \"Fiat\",\n    \"model\": \"Uno\",\n    \"year\": 2020\n  },\n  \"description\": \"Barulho ao frear e vibração no volante\",\n  \"services\": [\n    {\n      \"serviceId\": \"{{serviceId}}\"\n    }\n  ],\n  \"parts\": [\n    {\n      \"inventoryId\": \"{{partId}}\",\n      \"quantity\": 1\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "B3.2 Cancelar OS",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status 200\",()=>pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/cancel-service",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "service-orders",
+                    "{{serviceOrderId}}",
+                    "cancel-service"
+                  ]
+                },
+                "description": ""
+              }
+            }
+          ]
+        },
+        {
+          "name": "B4 - Links do e-mail",
+          "item": [
+            {
+              "name": "B4.1 Abrir OS",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OS criada (201)\",()=>pm.response.to.have.status(201));",
+                      "const j=pm.response.json();",
+                      "pm.collectionVariables.set(\"serviceOrderId\", j.id);",
+                      "pm.collectionVariables.set(\"clientId\", j.clientId || pm.collectionVariables.get(\"clientId\"));",
+                      "pm.collectionVariables.set(\"vehicleId\", j.vehicleId);",
+                      "if(j.trackingLink){pm.collectionVariables.set(\"trackingToken\", j.trackingLink.split(\"/\").pop());}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/service-orders",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "service-orders"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"client\": {\n    \"cpfCnpj\": \"529.982.247-25\",\n    \"name\": \"João da Silva\",\n    \"phone\": \"11999998888\",\n    \"address\": \"Rua das Flores, 123 - São Paulo/SP\",\n    \"email\": \"joao@example.com\"\n  },\n  \"vehicle\": {\n    \"licensePlate\": \"ABC1D23\",\n    \"brand\": \"Fiat\",\n    \"model\": \"Uno\",\n    \"year\": 2020\n  },\n  \"description\": \"Barulho ao frear e vibração no volante\",\n  \"services\": [\n    {\n      \"serviceId\": \"{{serviceId}}\"\n    }\n  ],\n  \"parts\": [\n    {\n      \"inventoryId\": \"{{partId}}\",\n      \"quantity\": 1\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "B4.2 Iniciar diagnóstico (mecânico)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status 200\",()=>pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/start-diagnosis",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "service-orders",
+                    "{{serviceOrderId}}",
+                    "start-diagnosis"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token_mechanic}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "B4.3 Adicionar serviços e peças (mecânico)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status 200\",()=>pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/add-services-and-parts",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "service-orders",
+                    "{{serviceOrderId}}",
+                    "add-services-and-parts"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"services\": [\n    {\n      \"serviceId\": \"{{serviceId}}\"\n    }\n  ],\n  \"parts\": [\n    {\n      \"inventoryId\": \"{{partId}}\",\n      \"quantity\": 1\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token_mechanic}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "B4.4 Gerar orçamento (e-mail com links)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status 200\",()=>pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/budget",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "service-orders",
+                    "{{serviceOrderId}}",
+                    "budget"
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "B4.5 Abrir confirmação (GET)",
+              "event": [],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/budget-decisions/{{decisionToken}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "budget-decisions",
+                    "{{decisionToken}}"
+                  ]
+                },
+                "description": "Antes: abra o Mailpit (http://localhost:8025), copie o token do link do e-mail de orçamento (a parte depois de /budget-decisions/) e cole na variável decisionToken. O GET só mostra a confirmação, não altera a OS.",
+                "auth": {
+                  "type": "noauth"
+                }
+              }
+            },
+            {
+              "name": "B4.6 Confirmar decisão (POST)",
+              "event": [],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/budget-decisions/{{decisionToken}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "budget-decisions",
+                    "{{decisionToken}}"
+                  ]
+                },
+                "description": "Registra a decisão do link (aprovar ou recusar, conforme o link copiado). A primeira decisão vale.",
+                "auth": {
+                  "type": "noauth"
+                }
+              }
+            }
+          ]
         }
       ]
     },
@@ -832,8 +1609,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/health",
-              "host": ["{{baseUrl}}"],
-              "path": ["health"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
             },
             "description": "Checks API liveness",
             "auth": {
@@ -849,8 +1630,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/ready",
-              "host": ["{{baseUrl}}"],
-              "path": ["ready"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ready"
+              ]
             },
             "description": "Checks API readiness including database availability",
             "auth": {
@@ -896,8 +1681,13 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/auth/users",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "users"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "users"
+              ]
             },
             "description": "Create a user",
             "body": {
@@ -919,8 +1709,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/auth/users?role=",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "users"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "users"
+              ],
               "query": [
                 {
                   "key": "role",
@@ -958,8 +1753,13 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "login"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
             },
             "description": "Login user and generate JWT token",
             "body": {
@@ -984,8 +1784,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/auth/users/{{userEmail}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "users", "{{userEmail}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "users",
+                "{{userEmail}}"
+              ]
             },
             "description": "Get a user by email"
           }
@@ -1003,8 +1809,14 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/auth/users/{{id}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "users", "{{id}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "users",
+                "{{id}}"
+              ]
             },
             "description": "Update a user",
             "body": {
@@ -1026,8 +1838,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/auth/users/{{id}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "users", "{{id}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "users",
+                "{{id}}"
+              ]
             },
             "description": "Soft delete a user"
           }
@@ -1061,8 +1879,12 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/services",
-              "host": ["{{baseUrl}}"],
-              "path": ["services"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "services"
+              ]
             },
             "description": "Creates a new service",
             "body": {
@@ -1084,8 +1906,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/services",
-              "host": ["{{baseUrl}}"],
-              "path": ["services"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "services"
+              ]
             },
             "description": "List all services"
           }
@@ -1098,8 +1924,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/services/{{serviceId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["services", "{{serviceId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "services",
+                "{{serviceId}}"
+              ]
             },
             "description": "Fetch a service by ID"
           }
@@ -1117,8 +1948,13 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/services/{{serviceId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["services", "{{serviceId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "services",
+                "{{serviceId}}"
+              ]
             },
             "description": "Updates a service by ID",
             "body": {
@@ -1140,8 +1976,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/services/{{serviceId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["services", "{{serviceId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "services",
+                "{{serviceId}}"
+              ]
             },
             "description": "Deletes a service by ID"
           }
@@ -1175,8 +2016,12 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/inventory",
-              "host": ["{{baseUrl}}"],
-              "path": ["inventory"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "inventory"
+              ]
             },
             "description": "Creates a new inventory item",
             "body": {
@@ -1198,8 +2043,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/inventory",
-              "host": ["{{baseUrl}}"],
-              "path": ["inventory"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "inventory"
+              ]
             },
             "description": "List all inventory items"
           }
@@ -1212,8 +2061,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/inventory/low-stock",
-              "host": ["{{baseUrl}}"],
-              "path": ["inventory", "low-stock"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "inventory",
+                "low-stock"
+              ]
             },
             "description": "Lists inventory items whose logical stock is below the configured minimum\n\nLogical stock subtracts from the physical quantity everything already committed to service orders that are still open (RECEIVED, IN_DIAGNOSIS, AWAITING_APPROVAL, IN_EXECUTION)."
           }
@@ -1231,8 +2085,13 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/inventory/{{partId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["inventory", "{{partId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "inventory",
+                "{{partId}}"
+              ]
             },
             "description": "Updates an inventory item by ID",
             "body": {
@@ -1254,8 +2113,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/inventory/{{partId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["inventory", "{{partId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "inventory",
+                "{{partId}}"
+              ]
             },
             "description": "Deletes an inventory item by ID"
           }
@@ -1273,8 +2137,14 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/inventory/{{partId}}/restock",
-              "host": ["{{baseUrl}}"],
-              "path": ["inventory", "{{partId}}", "restock"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "inventory",
+                "{{partId}}",
+                "restock"
+              ]
             },
             "description": "Adds quantity to an inventory item",
             "body": {
@@ -1301,8 +2171,14 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/inventory/{{partId}}/consume",
-              "host": ["{{baseUrl}}"],
-              "path": ["inventory", "{{partId}}", "consume"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "inventory",
+                "{{partId}}",
+                "consume"
+              ]
             },
             "description": "Consumes quantity from an inventory item",
             "body": {
@@ -1345,8 +2221,12 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/clients",
-              "host": ["{{baseUrl}}"],
-              "path": ["clients"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clients"
+              ]
             },
             "description": "Creates a new client",
             "body": {
@@ -1368,8 +2248,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/clients",
-              "host": ["{{baseUrl}}"],
-              "path": ["clients"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clients"
+              ]
             },
             "description": "List all clients"
           }
@@ -1382,8 +2266,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/clients/{{clientId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["clients", "{{clientId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clients",
+                "{{clientId}}"
+              ]
             },
             "description": "Fetch a client by ID"
           }
@@ -1401,8 +2290,13 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/clients/{{clientId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["clients", "{{clientId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clients",
+                "{{clientId}}"
+              ]
             },
             "description": "Updates a client by ID",
             "body": {
@@ -1424,8 +2318,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/clients/{{clientId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["clients", "{{clientId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clients",
+                "{{clientId}}"
+              ]
             },
             "description": "Deletes a client by ID"
           }
@@ -1459,8 +2358,12 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/vehicles",
-              "host": ["{{baseUrl}}"],
-              "path": ["vehicles"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vehicles"
+              ]
             },
             "description": "Creates a new vehicle",
             "body": {
@@ -1482,8 +2385,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/vehicles",
-              "host": ["{{baseUrl}}"],
-              "path": ["vehicles"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vehicles"
+              ]
             },
             "description": "List all vehicles"
           }
@@ -1496,8 +2403,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/vehicles/{{vehicleId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["vehicles", "{{vehicleId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vehicles",
+                "{{vehicleId}}"
+              ]
             },
             "description": "Fetch a vehicle by ID"
           }
@@ -1515,8 +2427,13 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/vehicles/{{vehicleId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["vehicles", "{{vehicleId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vehicles",
+                "{{vehicleId}}"
+              ]
             },
             "description": "Updates a vehicle by ID",
             "body": {
@@ -1538,8 +2455,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/vehicles/{{vehicleId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["vehicles", "{{vehicleId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vehicles",
+                "{{vehicleId}}"
+              ]
             },
             "description": "Deletes a vehicle by ID"
           }
@@ -1557,8 +2479,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/service-orders/metrics/average-execution-time?from=&to=",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders", "metrics", "average-execution-time"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-orders",
+                "metrics",
+                "average-execution-time"
+              ],
               "query": [
                 {
                   "key": "from",
@@ -1605,8 +2533,12 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/service-orders",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-orders"
+              ]
             },
             "description": "Opens a service order in a single request\n\nReuses the client (by CPF/CNPJ) and the vehicle (by license plate), creating them when they do not exist yet. Services and parts are optional. Everything is saved in one transaction: if any step fails, nothing is persisted.",
             "body": {
@@ -1628,8 +2560,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/service-orders?status=&mechanicId=",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-orders"
+              ],
               "query": [
                 {
                   "key": "status",
@@ -1656,8 +2592,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/service-orders/track/{{trackingToken}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders", "track", "{{trackingToken}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-orders",
+                "track",
+                "{{trackingToken}}"
+              ]
             },
             "description": "Publicly retrieves the current status and last update date of a service order",
             "auth": {
@@ -1673,8 +2615,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders", "{{serviceOrderId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-orders",
+                "{{serviceOrderId}}"
+              ]
             },
             "description": "Retrieves a service order by ID\n\nThe status is returned in the client-facing terms: Recebida, Diagnóstico, Aguardando aprovação, Execução, Finalizada, Entregue or Cancelada."
           }
@@ -1692,8 +2639,13 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders", "{{serviceOrderId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-orders",
+                "{{serviceOrderId}}"
+              ]
             },
             "description": "Updates a service order by ID",
             "body": {
@@ -1715,8 +2667,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders", "{{serviceOrderId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-orders",
+                "{{serviceOrderId}}"
+              ]
             },
             "description": "Soft deletes a service order by ID"
           }
@@ -1729,8 +2686,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/tracking-link",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders", "{{serviceOrderId}}", "tracking-link"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-orders",
+                "{{serviceOrderId}}",
+                "tracking-link"
+              ]
             },
             "description": "Retrieves the public tracking link to share with the client"
           }
@@ -1743,8 +2706,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/budget",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders", "{{serviceOrderId}}", "budget"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-orders",
+                "{{serviceOrderId}}",
+                "budget"
+              ]
             },
             "description": "Generates or retrieves the service order budget\n\nUse this PATCH to generate the budget when the service order is in FINISHED_DIAGNOSIS, which changes its status to AWAITING_APPROVAL. For any later status, the endpoint retrieves the budget without changing the status. Service orders in RECEIVED or IN_DIAGNOSIS cannot access a budget because items have not been added yet."
           }
@@ -1757,10 +2726,26 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/start-diagnosis",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders", "{{serviceOrderId}}", "start-diagnosis"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-orders",
+                "{{serviceOrderId}}",
+                "start-diagnosis"
+              ]
             },
-            "description": "Starts the diagnosis for a service order by ID\n\nThe selected service order must have RECEIVED status. The mechanic ID is taken from the authenticated user."
+            "description": "Starts the diagnosis for a service order by ID\n\nThe selected service order must have RECEIVED status. The mechanic ID is taken from the authenticated user.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_mechanic}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         },
         {
@@ -1776,8 +2761,14 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/add-services-and-parts",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders", "{{serviceOrderId}}", "add-services-and-parts"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-orders",
+                "{{serviceOrderId}}",
+                "add-services-and-parts"
+              ]
             },
             "description": "Adds services and parts to a service order and finishes the diagnosis by ID\n\nThe service order must have IN_DIAGNOSIS status and be assigned to the authenticated mechanic.",
             "body": {
@@ -1788,6 +2779,16 @@
                   "language": "json"
                 }
               }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_mechanic}}",
+                  "type": "string"
+                }
+              ]
             }
           }
         },
@@ -1799,8 +2800,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/approve-budget",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders", "{{serviceOrderId}}", "approve-budget"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-orders",
+                "{{serviceOrderId}}",
+                "approve-budget"
+              ]
             },
             "description": "Approves the budget for a service order"
           }
@@ -1813,8 +2820,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/cancel-service",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders", "{{serviceOrderId}}", "cancel-service"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-orders",
+                "{{serviceOrderId}}",
+                "cancel-service"
+              ]
             },
             "description": "Cancels a service order\n\nThe service order can be canceled in any status except FINISHED or DELIVERED."
           }
@@ -1827,10 +2840,26 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/start-service",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders", "{{serviceOrderId}}", "start-service"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-orders",
+                "{{serviceOrderId}}",
+                "start-service"
+              ]
             },
-            "description": "Starts service execution by ID\n\nThe service order must be AWAITING_EXECUTION and assigned to the authenticated mechanic."
+            "description": "Starts service execution by ID\n\nThe service order must be AWAITING_EXECUTION and assigned to the authenticated mechanic.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_mechanic}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         },
         {
@@ -1841,10 +2870,26 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/finish-service",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders", "{{serviceOrderId}}", "finish-service"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-orders",
+                "{{serviceOrderId}}",
+                "finish-service"
+              ]
             },
-            "description": "Finishes service execution by ID\n\nThe service order must be IN EXECUTION and assigned to the authenticated mechanic."
+            "description": "Finishes service execution by ID\n\nThe service order must be IN EXECUTION and assigned to the authenticated mechanic.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_mechanic}}",
+                  "type": "string"
+                }
+              ]
+            }
           }
         },
         {
@@ -1855,8 +2900,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/service-orders/{{serviceOrderId}}/deliver",
-              "host": ["{{baseUrl}}"],
-              "path": ["service-orders", "{{serviceOrderId}}", "deliver"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "service-orders",
+                "{{serviceOrderId}}",
+                "deliver"
+              ]
             },
             "description": "Delivers a service order by ID\n\nThe service order must have FINISHED status."
           }
@@ -1874,8 +2925,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/budget-decisions/{{decisionToken}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["budget-decisions", "{{decisionToken}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "budget-decisions",
+                "{{decisionToken}}"
+              ]
             },
             "description": "Shows the confirmation page of the approve/reject link sent by e-mail\n\nDoes not change the service order: only the POST registers the decision. The token is signed (HMAC) and expires in 7 days.",
             "auth": {
@@ -1891,8 +2947,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/budget-decisions/{{decisionToken}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["budget-decisions", "{{decisionToken}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "budget-decisions",
+                "{{decisionToken}}"
+              ]
             },
             "description": "Registers the decision of the e-mail link (approve or reject)\n\nReuses the budget decision flow of the webhook: the first decision wins; repeated or opposite decisions are ignored.",
             "auth": {
@@ -1926,7 +2987,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test(\"status 200\",()=>pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test(\"status 200\",()=>pm.response.to.have.status(200));"
+                ]
               }
             }
           ],
@@ -1944,8 +3007,13 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/webhooks/budget-decision",
-              "host": ["{{baseUrl}}"],
-              "path": ["webhooks", "budget-decision"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "webhooks",
+                "budget-decision"
+              ]
             },
             "description": "Receives the external approval or rejection of a service order budget\n\nNot authenticated by JWT: the call is authenticated by the HMAC-SHA256 signature of the raw body in the X-Signature header. APPROVED moves the service order to execution; REJECTED cancels it and releases its parts. Repeated decisions, or decisions for a service order that is no longer awaiting approval, are ignored (processed: false).\n\n**Signature:** `sha256=` followed by the hex HMAC-SHA256 of the exact bytes sent as the body, keyed with `BUDGET_WEBHOOK_SECRET`.\n\nNode.js: `\"sha256=\" + createHmac(\"sha256\", secret).update(body).digest(\"hex\")`\n\nShell: `printf %s \"$BODY\" | openssl dgst -sha256 -hmac \"$SECRET\"` (prefix the hex result with `sha256=`)",
             "body": {

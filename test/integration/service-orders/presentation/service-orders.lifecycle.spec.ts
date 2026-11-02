@@ -115,7 +115,8 @@ describe('ServiceOrdersController lifecycle (integration)', () => {
         client: { cpfCnpj: clientCpfCnpj },
         vehicle: { licensePlate },
         description: 'Ruído',
-      });
+      })
+      .expect(201);
     return response.body.id as string;
   };
 
@@ -123,12 +124,13 @@ describe('ServiceOrdersController lifecycle (integration)', () => {
     http().patch(`/service-orders/${id}/${action}`).set('Authorization', authorization);
 
   const toAwaitingApproval = async (id: string): Promise<void> => {
-    await act(id, 'start-diagnosis', mechanic());
+    await act(id, 'start-diagnosis', mechanic()).expect(200);
     await http()
       .patch(`/service-orders/${id}/add-services-and-parts`)
       .set('Authorization', mechanic())
-      .send({ services: [{ serviceId }], parts: [{ inventoryId: partId, quantity: 2 }] });
-    await act(id, 'budget', admin());
+      .send({ services: [{ serviceId }], parts: [{ inventoryId: partId, quantity: 2 }] })
+      .expect(200);
+    await act(id, 'budget', admin()).expect(200);
   };
 
   const statusInDb = async (id: string): Promise<string> =>
@@ -342,6 +344,17 @@ describe('ServiceOrdersController lifecycle (integration)', () => {
       await act(id, 'budget', admin());
 
       expect(gateway.sendBudget).toHaveBeenCalledTimes(1);
+    });
+
+    it('não repete o e-mail quando o status visto pelo cliente não muda (aprovação e início da execução)', async () => {
+      const id = await openOrder();
+      await toAwaitingApproval(id);
+      await act(id, 'approve-budget', admin()).expect(200);
+      gateway.sendStatusUpdate.mockClear();
+
+      await act(id, 'start-service', mechanic()).expect(200);
+
+      expect(gateway.sendStatusUpdate).not.toHaveBeenCalled();
     });
 
     it('não envia nada e não falha quando o cliente não tem e-mail', async () => {
