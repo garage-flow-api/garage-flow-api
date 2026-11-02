@@ -19,6 +19,7 @@ describe('UpdateServiceOrderUseCase', () => {
       findById: jest.fn().mockResolvedValue(buildServiceOrder()),
       findAll: jest.fn(),
       findAverageExecutionTime: jest.fn(),
+      lockForUpdate: jest.fn(),
     };
 
     useCase = new UpdateServiceOrderUseCase(repository);

@@ -29,6 +29,7 @@ export interface AverageExecutionTimeMetrics {
 export abstract class ServiceOrderRepository {
   abstract save(serviceOrder: ServiceOrder): Promise<ServiceOrder>;
   abstract findById(id: string): Promise<ServiceOrder | null>;
+  abstract lockForUpdate(id: string): Promise<void>;
   abstract findAll(
     status?: ServiceOrderStatus,
     mechanicId?: string,
