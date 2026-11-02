@@ -28,7 +28,7 @@ Na Fase 2, a aplicação desenvolvida na etapa anterior passa a ser preparada pa
 - evolução da organização do código e dos testes automatizados;
 - conteinerização da aplicação com Docker;
 - orquestração da API e do PostgreSQL com Kubernetes;
-- escalabilidade automática conforme o consumo de CPU e memória;
+- escalabilidade automática conforme o consumo de CPU;
 - provisionamento de infraestrutura como código com Terraform;
 - automação do processo de build e deploy com CI/CD;
 - validação do comportamento da aplicação sob carga.
@@ -53,6 +53,119 @@ Neste repositório, o ambiente de desenvolvimento é executado com Docker Compos
 - **ESLint + Prettier**
 - **Husky**
 - **SonarQube** (análise estática de código, apenas em desenvolvimento)
+
+## Desenho da arquitetura
+
+Os diagramas abaixo mostram os componentes da API, a infraestrutura na Azure e o fluxo de deploy.
+
+### Componentes da aplicação
+
+Monólito NestJS dividido em contextos de negócio (`auth`, `client`, `vehicle`, `service`, `inventory`, `service-orders` e `notification`), organizados nas camadas presentation, application, domain e infrastructure. Os casos de uso dependem de interfaces (repositórios e `NotificationGateway`), implementadas na camada de infraestrutura com Prisma e SMTP.
+
+Quando o status de uma OS muda, o cliente recebe um e-mail com o link de acompanhamento. No orçamento, o e-mail traz também os links para aprovar ou recusar. Em desenvolvimento, os e-mails ficam no Mailpit.
+
+```mermaid
+%%{init: {'theme': 'neutral'}}%%
+flowchart LR
+    staff(["Equipe da oficina"])
+    customer(["Cliente"])
+    external(["Sistema de aprovação<br/>de orçamento"])
+
+    subgraph api["API NestJS"]
+        direction LR
+        subgraph common["Transversal"]
+            filter["Filtro global<br/>de exceções"]
+            monitoring["/health e /ready"]
+        end
+        subgraph presentation["Presentation"]
+            guards["Guards<br/>JWT, papéis e HMAC"]
+            ctrl["Controllers e DTOs"]
+        end
+        subgraph application["Application"]
+            uc["Casos de uso"]
+            gateway["NotificationGateway"]
+        end
+        subgraph domain["Domain"]
+            model["Entidades e<br/>value objects"]
+            ports["Interfaces dos<br/>repositórios"]
+        end
+        subgraph infrastructure["Infrastructure"]
+            repos["Repositórios Prisma"]
+            smtp["Adapter SMTP<br/>(Nodemailer)"]
+        end
+    end
+
+    db[("PostgreSQL 16")]
+    mail["Servidor SMTP<br/>(Mailpit em desenvolvimento)"]
+
+    staff -- "HTTP com JWT" --> guards
+    external -- "webhook assinado" --> guards
+    customer -- "links do e-mail,<br/>sem login" --> ctrl
+    guards --> ctrl
+    ctrl --> uc
+    uc --> model
+    uc --> ports
+    uc -- "mudança de status" --> gateway
+    ports -. "implementada por" .-> repos
+    gateway -. "implementada por" .-> smtp
+    repos --> db
+    smtp -- "e-mail ao cliente" --> mail
+    uc -. "erro de domínio" .-> filter
+```
+
+### Infraestrutura provisionada
+
+Criada pelo Terraform em [`infra/azure`](infra/README.md), no ambiente `staging` (região `northcentralus`, AKS com 2 nodes `Standard_B2als_v2`). O banco não tem endpoint público e só é acessível de dentro da VNet do cluster. Os segredos são gerados pelo Terraform e guardados no Key Vault.
+
+O servidor SMTP fica fora da Azure e não é criado pelo Terraform. A API usa o servidor configurado nas variáveis `SMTP_*`.
+
+```mermaid
+%%{init: {'theme': 'neutral'}}%%
+flowchart TB
+    user(["Cliente HTTP"])
+    gha(["GitHub Actions<br/>login OIDC"])
+    mail(["Servidor SMTP externo"])
+
+    subgraph azure["Azure, ambiente staging"]
+        direction TB
+        acr[("ACR<br/>imagens da API e dos Jobs")]
+        kv[("Key Vault")]
+
+        subgraph vnet["VNet"]
+            lb["Load Balancer<br/>IP público, host IP.nip.io"]
+            subgraph aks["AKS"]
+                ingress["NGINX Ingress Controller"]
+                api["Pods da API<br/>HPA de 1 a 5 réplicas"]
+                jobs["Jobs de migration<br/>e do primeiro admin"]
+                config["Secret e ConfigMap"]
+                alias["Service ExternalName<br/>garage-flow-postgres"]
+            end
+            subgraph snetpg["Subnet privada"]
+                pg[("PostgreSQL<br/>Flexible Server 16")]
+            end
+        end
+    end
+
+    user -- "HTTP" --> lb
+    lb --> ingress
+    ingress --> api
+    api --> alias
+    jobs --> alias
+    alias -. "DNS privado, TLS" .-> pg
+    config -.-> api
+    config -.-> jobs
+    aks -. "AcrPull" .-> acr
+    gha -- "push das imagens" --> acr
+    gha -- "kubectl apply" --> aks
+    kv -. "mesmos segredos" .- config
+    api -- "SMTP" --> mail
+```
+
+O ambiente local (Docker Desktop, com o PostgreSQL dentro do cluster) está descrito em [Ambiente de produção — Kubernetes](#ambiente-de-produção--kubernetes).
+
+### Fluxo de deploy
+
+Cada push na `main` passa pelos testes, gera as imagens, aplica as migrations e atualiza a API no AKS. A infraestrutura é criada e destruída só manualmente. O desenho com os jobs e os gatilhos está em [Pipeline de CI/CD](#pipeline-de-cicd).
 
 ## Arquitetura
 
@@ -119,7 +232,7 @@ Não existe um Docker Compose de produção. O estágio `production` do `Dockerf
 ### Pré-requisitos
 
 - Docker
-- Node.js 20+
+- Node.js 24
 - npm
 
 ### 1. Configuração
@@ -135,9 +248,8 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5432/garage-flow?schema=pu
 JWT_SECRET=troque-por-um-segredo-forte
 JWT_EXPIRES_IN=1d
 
-# Assinatura dos links públicos e do webhook de orçamento
+# Assinatura dos links públicos
 TRACKING_TOKEN_SECRET=troque-por-outro-segredo-forte
-BUDGET_WEBHOOK_SECRET=troque-por-um-segredo-do-webhook
 
 # Webhook de decisão do orçamento: chave do HMAC que assina o corpo da requisição
 BUDGET_WEBHOOK_SECRET=troque-por-um-segredo-do-webhook
@@ -272,7 +384,7 @@ garage-flow-deployment
 | `k8s/bootstrap-admin-job.yaml` | Job que cria o primeiro usuário `ADMIN`                     |
 | `k8s/deployment.yaml`          | Deployment da API com recursos, liveness e readiness probes |
 | `k8s/service.yaml`             | Service interno da API                                      |
-| `k8s/hpa.yaml`                 | Escalabilidade automática por CPU e memória                 |
+| `k8s/hpa.yaml`                 | Escalabilidade automática por CPU                 |
 | `k8s/ingress.yaml`             | Roteamento HTTP por meio de NGINX Ingress                   |
 
 > Os valores presentes em `k8s/secret.yaml` e `k8s/admin-secret.yaml` são destinados somente ao ambiente local de demonstração. Em uma produção real, utilize um gerenciador de segredos da cloud e não versione credenciais reais no repositório.
@@ -505,29 +617,42 @@ A pipeline usa GitHub Actions e a stack **Azure** de `infra/`, em dois workflows
 ### Fluxo
 
 ```mermaid
+%%{init: {'theme': 'neutral'}}%%
 flowchart LR
-    PR["Pull request"] --> CI1["ci"] --> IMG1["image<br/>build + Trivy"]
+    subgraph sgManual["Workflow infra, manual"]
+        direction LR
+        RUNINFRA(["Run workflow"]) -- "provision + sim" --> PROV["provision<br/>terraform apply"]
+        RUNINFRA -- "destroy + destruir" --> DEST["destroy<br/>terraform destroy"]
+    end
 
-    PUSH["Push na main"] --> CI2["ci"] --> IMG2["image<br/>build + Trivy + push no ACR"]
-    IMG2 -->|"infra no ar"| DEP["deploy<br/>migration, admin, manifestos,<br/>rollout e health check"]
-    IMG2 -.->|"infra destruída"| SKIP["deploy pulado"]
+    subgraph sgMain["Workflow ci-cd na main"]
+        direction LR
+        PUSH(["Push na main"]) --> CI2["ci<br/>lint, build e testes"]
+        PUSH --> VAL2["validate-infra<br/>Terraform e Kustomize"]
+        CI2 --> IMG2["image<br/>build, Trivy e push no ACR"]
+        IMG2 -- "infra no ar" --> DEP["deploy<br/>migration, admin, manifestos<br/>e health check"]
+        VAL2 --> DEP
+        IMG2 -. "infra destruída" .-> SKIP["deploy pulado"]
+    end
 
-    RUNCD["Run workflow (ci-cd)"] --> CI2
-
-    RUNINFRA["Run workflow (infra)"] -->|"action = provision"| PROV["provision<br/>terraform apply"]
-    RUNINFRA -->|"action = destroy"| DEST["destroy<br/>terraform destroy"]
+    subgraph sgPr["Workflow ci-cd em PR"]
+        direction LR
+        PR(["Pull request"]) --> CI1["ci<br/>lint, build e testes"]
+        PR --> VAL1["validate-infra<br/>Terraform e Kustomize"]
+        CI1 --> IMG1["image<br/>build e Trivy"]
+    end
 ```
 
 ### Jobs
 
-| Job              | Quando roda                                                         | O que faz                                                                                                                                                                                                                       |
-| ---------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ci`             | PR, push na `main` e "Run workflow" do `ci-cd`                      | `npm ci`, Prisma generate, lint, Prettier, build e testes com cobertura (artefato `coverage`)                                                                                                                                   |
-| `validate-infra` | PR, push na `main` e "Run workflow" do `ci-cd`, em paralelo ao `ci` | `terraform fmt` e `validate` em `infra/azure` (sem acessar a Azure) e `kubectl kustomize` na base `k8s/` e nos overlays. Se falhar, o deploy não roda                                                                           |
-| `image`          | Depois do `ci`                                                      | Builda a imagem da API e a dos Jobs e roda o Trivy (`CRITICAL`/`HIGH`) nas duas: bloqueante na da API e informativo na dos Jobs. Na `main` (push ou disparo manual), publica as duas no ACR, com o SHA curto do commit como tag |
-| `deploy`         | Depois do `image`, só se as imagens foram publicadas                | Jobs de migration e de criação do primeiro admin, overlay `cloud` (API, Service, Ingress, HPA), rollout e checagem de `/health` e `/ready`. As URLs aparecem no resumo da execução                                              |
-| `provision`      | Só pelo "Run workflow" do `infra`                                   | `terraform plan` + `apply` em `infra/azure`: AKS, ACR, PostgreSQL, Key Vault e Ingress (~15-20 min)                                                                                                                             |
-| `destroy`        | Só pelo "Run workflow" do `infra`                                   | Remove a aplicação do cluster, o Ingress e o restante da infra com `terraform destroy` (~10-15 min)                                                                                                                             |
+| Job | Quando roda | O que faz |
+| --- | --- | --- |
+| `ci` | PR, push na `main` e "Run workflow" do `ci-cd` | `npm ci`, Prisma generate, lint, Prettier, build e testes com cobertura (artefato `coverage`) |
+| `validate-infra` | PR, push na `main` e "Run workflow" do `ci-cd`, em paralelo ao `ci` | `terraform fmt` e `validate` em `infra/azure` (sem acessar a Azure) e `kubectl kustomize` na base `k8s/` e nos overlays. Se falhar, o deploy não roda |
+| `image` | Depois do `ci` | Builda a imagem da API e a dos Jobs e roda o Trivy (`CRITICAL`/`HIGH`) nas duas: bloqueante na da API e informativo na dos Jobs. Na `main` (push ou disparo manual), publica as duas no ACR, com o SHA curto do commit como tag |
+| `deploy` | Depois do `image` e do `validate-infra`, só na `main` e se as imagens foram publicadas | Jobs de migration e de criação do primeiro admin, overlay `cloud` (API, Service, Ingress, HPA), rollout e checagem de `/health` e `/ready`. As URLs aparecem no resumo da execução |
+| `provision` | Só pelo "Run workflow" do `infra` | `terraform plan` + `apply` em `infra/azure`: AKS, ACR, PostgreSQL, Key Vault e Ingress (~15-20 min) |
+| `destroy` | Só pelo "Run workflow" do `infra` | Remove a aplicação do cluster, o Ingress e o restante da infra com `terraform destroy` (~10-15 min) |
 
 Nada cria ou destrói infraestrutura automaticamente. Em push na `main`, a pipeline só **lê** o state do Terraform: se a infra não existir, as imagens não são publicadas e o deploy é pulado, sem falhar. As mesmas verificações do Husky (Prettier, ESLint e testes) são repetidas no job `ci`.
 
@@ -543,7 +668,7 @@ Fora da `main` ou sem a confirmação exata, o job falha antes de qualquer acess
 
 ### Credenciais
 
-- Login na Azure por **OIDC** (credencial federada do service principal `sp-garage-flow-github-actions`, aceita só para a `main`). **Nenhum secret é armazenado no GitHub.**
+- Login na Azure por **OIDC** (credencial federada do service principal `sp-garage-flow-github-actions`, aceita só para a `main`). O login na Azure não utiliza client secret. Os únicos GitHub Secrets são `SMTP_USER` e `SMTP_PASS`.
 - Três **repository variables** (Settings → Secrets and variables → Actions → Variables): `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` e `AZURE_SUBSCRIPTION_ID`. Não são valores sensíveis.
 - Os segredos gerados da aplicação (senha do banco, `JWT_SECRET`, `TRACKING_TOKEN_SECRET`, `BUDGET_WEBHOOK_SECRET` e senha do admin) ficam no Key Vault; os segredos usados pela API viram o Secret `garage-flow-secrets` no cluster. `SMTP_USER` e `SMTP_PASS`, quando necessários, são recebidos por `TF_VAR_smtp_user` e `TF_VAR_smtp_pass`, nunca por um `.tfvars` versionado. As credenciais do primeiro admin só existem no cluster durante o Job de bootstrap: o deploy cria o Secret a partir dos outputs do Terraform, com a senha mascarada no log, e o apaga em seguida.
 
@@ -554,7 +679,7 @@ Fora da `main` ou sem a confirmação exata, o job falha antes de qualquer acess
 - **O Trivy bloqueia a publicação:** com vulnerabilidade `CRITICAL` ou `HIGH` corrigível na imagem da API, nada vai para o ACR e não há deploy. Na imagem dos Jobs o scan só reporta, porque ela leva as dependências de desenvolvimento.
 - Em pushes seguidos, só o commit mais recente da `main` é implantado; execuções de commits anteriores pulam o deploy.
 
-Tempo médio da pipeline: _TODO — preencher após a execução real_.
+Tempo da pipeline com deploy: cerca de **8 minutos** de ponta a ponta (`ci` cerca de 1,5 min, `image` cerca de 4 min e `deploy` cerca de 2,5 min, com o `validate-infra` em paralelo), medido na primeira execução real.
 
 ## Como usar e testar a API
 
@@ -562,7 +687,7 @@ Tempo médio da pipeline: _TODO — preencher após a execução real_.
 
 #### Produção com Kubernetes
 
-O Kubernetes não executa o seed de demonstração. O Job `garage-flow-migration` aplica as migrations, e o Job `garage-flow-bootstrap-admin` cria somente o primeiro administrador com as credenciais configuradas em `k8s/admin-secret.yaml`.
+O Kubernetes não executa o seed de demonstração. O Job `garage-flow-migration` aplica as migrations, e o Job `garage-flow-bootstrap-admin` cria somente o primeiro administrador. No ambiente Kubernetes local, as credenciais são configuradas em `k8s/admin-secret.yaml`. Na Azure, elas são geradas pelo Terraform e armazenadas no Key Vault; durante o deploy, um Secret temporário é criado no cluster apenas para executar o Job e removido em seguida.
 
 Depois de executar o bootstrap, autentique esse administrador por meio de `POST /auth/login`. Com o token recebido, ele poderá cadastrar os demais usuários pela rota protegida `POST /auth/users`.
 
@@ -597,7 +722,7 @@ A resposta traz um `access_token` (JWT), que deve ser enviado no header `Authori
 | **MECHANIC**        | Iniciar diagnóstico, adicionar serviços/peças à OS, iniciar e finalizar a execução do serviço           |
 | **STOCK_CLERK**     | Cadastrar, reabastecer e dar baixa manual em peças; consultar peças com estoque abaixo do mínimo        |
 
-> Consultas de leitura (`GET`) na maioria dos recursos estão disponíveis para qualquer usuário autenticado, independente da role. As exceções (ex.: `GET /inventory/low-stock`) exigem a role MECHANIC. `GET /service-orders/track/:token`, `POST /auth/login` e `/budget-decisions/:token` (links dos e-mails de orçamento) são as únicas rotas públicas, sem necessidade de autenticação.
+> Consultas de leitura (`GET`) na maioria dos recursos estão disponíveis para qualquer usuário autenticado, independente da role. Entre as exceções, `GET /inventory/low-stock` exige a role `ADMIN` ou `STOCK_CLERK`. As rotas que não usam JWT são `POST /auth/login`, `GET /service-orders/track/:token`, `GET|POST /budget-decisions/:token`, `POST /webhooks/budget-decision`, `GET /health` e `GET /ready`. Os links de acompanhamento e decisão são protegidos por tokens assinados, e o webhook exige uma assinatura HMAC válida.
 
 ### 2. Clientes
 
@@ -893,20 +1018,24 @@ O projeto utiliza **Jest** para testes unitários e **Jest + Supertest** para te
 ```text
 test/
 ├── unit/
-│   ├── health/
 │   ├── auth/
 │   ├── client/
-│   ├── vehicle/
-│   ├── service/
+│   ├── common/
 │   ├── inventory/
-│   └── service-orders/
-│
+│   ├── monitoring/
+│   ├── notification/
+│   ├── prisma/
+│   ├── service/
+│   ├── service-orders/
+│   └── vehicle/
 └── integration/
+    ├── auth/
     ├── client/
-    ├── vehicle/
-    ├── service/
     ├── inventory/
-    └── service-orders/
+    ├── monitoring/
+    ├── service/
+    ├── service-orders/
+    └── vehicle/
 ```
 
 ### Testes unitários

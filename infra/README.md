@@ -309,7 +309,7 @@ kubectl top pods
 
 ### Teste de carga
 
-`k6/load-test.js` aponta para `http://localhost:30080/health`. Para testar o ambiente em cloud, substitua a URL pelo endereço exibido no fim do deploy. Enquanto o teste roda, acompanhe o HPA:
+`k6/load-test.js` aponta para `http://localhost:3000/health`. Para testar o ambiente em cloud, substitua a URL pelo endereço exibido no fim do deploy. Enquanto o teste roda, acompanhe o HPA:
 
 ```bash
 kubectl get hpa garage-flow-hpa --watch
