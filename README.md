@@ -28,7 +28,7 @@ Na Fase 2, a aplicação desenvolvida na etapa anterior passa a ser preparada pa
 - evolução da organização do código e dos testes automatizados;
 - conteinerização da aplicação com Docker;
 - orquestração da API e do PostgreSQL com Kubernetes;
-- escalabilidade automática conforme o consumo de CPU e memória;
+- escalabilidade automática conforme o consumo de CPU;
 - provisionamento de infraestrutura como código com Terraform;
 - automação do processo de build e deploy com CI/CD;
 - validação do comportamento da aplicação sob carga.
@@ -232,7 +232,7 @@ Não existe um Docker Compose de produção. O estágio `production` do `Dockerf
 ### Pré-requisitos
 
 - Docker
-- Node.js 20+
+- Node.js 24
 - npm
 
 ### 1. Configuração
@@ -248,9 +248,8 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5432/garage-flow?schema=pu
 JWT_SECRET=troque-por-um-segredo-forte
 JWT_EXPIRES_IN=1d
 
-# Assinatura dos links públicos e do webhook de orçamento
+# Assinatura dos links públicos
 TRACKING_TOKEN_SECRET=troque-por-outro-segredo-forte
-BUDGET_WEBHOOK_SECRET=troque-por-um-segredo-do-webhook
 
 # Webhook de decisão do orçamento: chave do HMAC que assina o corpo da requisição
 BUDGET_WEBHOOK_SECRET=troque-por-um-segredo-do-webhook
@@ -385,7 +384,7 @@ garage-flow-deployment
 | `k8s/bootstrap-admin-job.yaml` | Job que cria o primeiro usuário `ADMIN`                     |
 | `k8s/deployment.yaml`          | Deployment da API com recursos, liveness e readiness probes |
 | `k8s/service.yaml`             | Service interno da API                                      |
-| `k8s/hpa.yaml`                 | Escalabilidade automática por CPU e memória                 |
+| `k8s/hpa.yaml`                 | Escalabilidade automática por CPU                 |
 | `k8s/ingress.yaml`             | Roteamento HTTP por meio de NGINX Ingress                   |
 
 > Os valores presentes em `k8s/secret.yaml` e `k8s/admin-secret.yaml` são destinados somente ao ambiente local de demonstração. Em uma produção real, utilize um gerenciador de segredos da cloud e não versione credenciais reais no repositório.
@@ -669,7 +668,7 @@ Fora da `main` ou sem a confirmação exata, o job falha antes de qualquer acess
 
 ### Credenciais
 
-- Login na Azure por **OIDC** (credencial federada do service principal `sp-garage-flow-github-actions`, aceita só para a `main`). **Nenhum secret é armazenado no GitHub.**
+- Login na Azure por **OIDC** (credencial federada do service principal `sp-garage-flow-github-actions`, aceita só para a `main`). O login na Azure não utiliza client secret. Os únicos GitHub Secrets são `SMTP_USER` e `SMTP_PASS`.
 - Três **repository variables** (Settings → Secrets and variables → Actions → Variables): `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` e `AZURE_SUBSCRIPTION_ID`. Não são valores sensíveis.
 - Os segredos gerados da aplicação (senha do banco, `JWT_SECRET`, `TRACKING_TOKEN_SECRET`, `BUDGET_WEBHOOK_SECRET` e senha do admin) ficam no Key Vault; os segredos usados pela API viram o Secret `garage-flow-secrets` no cluster. `SMTP_USER` e `SMTP_PASS`, quando necessários, são recebidos por `TF_VAR_smtp_user` e `TF_VAR_smtp_pass`, nunca por um `.tfvars` versionado. As credenciais do primeiro admin só existem no cluster durante o Job de bootstrap: o deploy cria o Secret a partir dos outputs do Terraform, com a senha mascarada no log, e o apaga em seguida.
 
@@ -688,7 +687,7 @@ Tempo da pipeline com deploy: cerca de **8 minutos** de ponta a ponta (`ci` cerc
 
 #### Produção com Kubernetes
 
-O Kubernetes não executa o seed de demonstração. O Job `garage-flow-migration` aplica as migrations, e o Job `garage-flow-bootstrap-admin` cria somente o primeiro administrador com as credenciais configuradas em `k8s/admin-secret.yaml`.
+O Kubernetes não executa o seed de demonstração. O Job `garage-flow-migration` aplica as migrations, e o Job `garage-flow-bootstrap-admin` cria somente o primeiro administrador. No ambiente Kubernetes local, as credenciais são configuradas em `k8s/admin-secret.yaml`. Na Azure, elas são geradas pelo Terraform e armazenadas no Key Vault; durante o deploy, um Secret temporário é criado no cluster apenas para executar o Job e removido em seguida.
 
 Depois de executar o bootstrap, autentique esse administrador por meio de `POST /auth/login`. Com o token recebido, ele poderá cadastrar os demais usuários pela rota protegida `POST /auth/users`.
 
@@ -723,7 +722,7 @@ A resposta traz um `access_token` (JWT), que deve ser enviado no header `Authori
 | **MECHANIC**        | Iniciar diagnóstico, adicionar serviços/peças à OS, iniciar e finalizar a execução do serviço           |
 | **STOCK_CLERK**     | Cadastrar, reabastecer e dar baixa manual em peças; consultar peças com estoque abaixo do mínimo        |
 
-> Consultas de leitura (`GET`) na maioria dos recursos estão disponíveis para qualquer usuário autenticado, independente da role. As exceções (ex.: `GET /inventory/low-stock`) exigem a role MECHANIC. `GET /service-orders/track/:token`, `POST /auth/login` e `/budget-decisions/:token` (links dos e-mails de orçamento) são as únicas rotas públicas, sem necessidade de autenticação.
+> Consultas de leitura (`GET`) na maioria dos recursos estão disponíveis para qualquer usuário autenticado, independente da role. Entre as exceções, `GET /inventory/low-stock` exige a role `ADMIN` ou `STOCK_CLERK`. As rotas que não usam JWT são `POST /auth/login`, `GET /service-orders/track/:token`, `GET|POST /budget-decisions/:token`, `POST /webhooks/budget-decision`, `GET /health` e `GET /ready`. Os links de acompanhamento e decisão são protegidos por tokens assinados, e o webhook exige uma assinatura HMAC válida.
 
 ### 2. Clientes
 
@@ -1019,20 +1018,24 @@ O projeto utiliza **Jest** para testes unitários e **Jest + Supertest** para te
 ```text
 test/
 ├── unit/
-│   ├── health/
 │   ├── auth/
 │   ├── client/
-│   ├── vehicle/
-│   ├── service/
+│   ├── common/
 │   ├── inventory/
-│   └── service-orders/
-│
+│   ├── monitoring/
+│   ├── notification/
+│   ├── prisma/
+│   ├── service/
+│   ├── service-orders/
+│   └── vehicle/
 └── integration/
+    ├── auth/
     ├── client/
-    ├── vehicle/
-    ├── service/
     ├── inventory/
-    └── service-orders/
+    ├── monitoring/
+    ├── service/
+    ├── service-orders/
+    └── vehicle/
 ```
 
 ### Testes unitários
