@@ -96,7 +96,7 @@ flowchart LR
     end
 
     db[("PostgreSQL 16")]
-    mail["Servidor SMTP<br/>(Mailpit em desenvolvimento)"]
+    mail["Servidor SMTP<br/>(Brevo na Azure,<br/>Mailpit em desenvolvimento)"]
 
     staff -- "HTTP com JWT" --> guards
     external -- "webhook assinado" --> guards
@@ -117,25 +117,25 @@ flowchart LR
 
 Criada pelo Terraform em [`infra/azure`](infra/README.md), no ambiente `staging` (região `northcentralus`, AKS com 3 nodes `Standard_B2als_v2`, conforme [`staging.tfvars`](infra/azure/environments/staging.tfvars)). O banco não tem endpoint público e só é acessível de dentro da VNet do cluster. Os segredos são gerados pelo Terraform e guardados no Key Vault.
 
-O servidor SMTP fica fora da Azure e não é criado pelo Terraform. A API usa o servidor configurado nas variáveis `SMTP_*`.
+Os e-mails saem pelo SMTP da Brevo, fora da Azure. O host fica no ConfigMap, e o usuário e a senha vêm dos GitHub Secrets `SMTP_USER` e `SMTP_PASS`, que o Terraform grava no Secret do cluster.
 
 ```mermaid
 %%{init: {'theme': 'neutral'}}%%
 flowchart TB
     user(["Cliente HTTP"])
     gha(["GitHub Actions<br/>login OIDC"])
-    mail(["Servidor SMTP externo"])
+    mail(["Brevo<br/>SMTP externo"])
 
     subgraph azure["Azure, ambiente staging"]
         direction TB
         acr[("ACR<br/>imagens da API e dos Jobs")]
         kv[("Key Vault")]
+        lb["Load Balancer<br/>IP público, host IP.nip.io"]
 
         subgraph vnet["VNet"]
-            lb["Load Balancer<br/>IP público, host IP.nip.io"]
             subgraph aks["AKS"]
                 ingress["NGINX Ingress Controller"]
-                api["Pods da API<br/>HPA de 1 a 5 réplicas"]
+                api["Pods da API<br/>HPA de 1 a 8 réplicas por CPU"]
                 jobs["Jobs de migration<br/>e do primeiro admin"]
                 config["Secret e ConfigMap"]
                 alias["Service ExternalName<br/>garage-flow-postgres"]
@@ -157,7 +157,7 @@ flowchart TB
     aks -. "AcrPull" .-> acr
     gha -- "push das imagens" --> acr
     gha -- "kubectl apply" --> aks
-    kv -. "mesmos segredos" .- config
+    kv -. "Terraform grava nos dois" .- config
     api -- "SMTP" --> mail
 ```
 
