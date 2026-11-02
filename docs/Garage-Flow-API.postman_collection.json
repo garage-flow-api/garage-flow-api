@@ -816,6 +816,92 @@
           "name": "B1 - Aprovar pelo webhook",
           "item": [
             {
+              "name": "B1.0a Cadastrar serviço (pré-requisito)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status 2xx\",()=>pm.expect(pm.response.code).to.be.within(200,299));",
+                      "try{const j=pm.response.json(); if(j&&j.id) pm.collectionVariables.set(\"serviceId\", j.id);}catch(e){}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/services",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "services"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Troca de óleo {{$timestamp}}\",\n  \"price\": 150\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "B1.0b Cadastrar peça (pré-requisito)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status 2xx\",()=>pm.expect(pm.response.code).to.be.within(200,299));",
+                      "try{const j=pm.response.json(); if(j&&j.id) pm.collectionVariables.set(\"partId\", j.id);}catch(e){}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/inventory",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "inventory"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Óleo sintético 5W40 {{$timestamp}}\",\n  \"unitOfMeasure\": \"ML\",\n  \"unitPrice\": 59.9,\n  \"quantity\": 20,\n  \"minQuantity\": 5\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
               "name": "B1.1 Abrir OS",
               "event": [
                 {
@@ -998,7 +1084,10 @@
                       "const secret = pm.collectionVariables.get(\"webhookSecret\");",
                       "const body = pm.variables.replaceIn(pm.request.body.raw);",
                       "pm.request.body.update({mode:\"raw\", raw: body, options:{raw:{language:\"json\"}}});",
-                      "const hex = CryptoJS.HmacSHA256(body, secret).toString(CryptoJS.enc.Hex);",
+                      "const enc = new TextEncoder();",
+                      "const key = await crypto.subtle.importKey(\"raw\", enc.encode(secret), { name: \"HMAC\", hash: \"SHA-256\" }, false, [\"sign\"]);",
+                      "const sig = await crypto.subtle.sign(\"HMAC\", key, enc.encode(body));",
+                      "const hex = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, \"0\")).join(\"\");",
                       "pm.variables.set(\"webhookSignature\", \"sha256=\" + hex);"
                     ]
                   }
@@ -1056,6 +1145,92 @@
         {
           "name": "B2 - Recusar pelo webhook",
           "item": [
+            {
+              "name": "B2.0a Cadastrar serviço (pré-requisito)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status 2xx\",()=>pm.expect(pm.response.code).to.be.within(200,299));",
+                      "try{const j=pm.response.json(); if(j&&j.id) pm.collectionVariables.set(\"serviceId\", j.id);}catch(e){}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/services",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "services"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Troca de óleo {{$timestamp}}\",\n  \"price\": 150\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "B2.0b Cadastrar peça (pré-requisito)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status 2xx\",()=>pm.expect(pm.response.code).to.be.within(200,299));",
+                      "try{const j=pm.response.json(); if(j&&j.id) pm.collectionVariables.set(\"partId\", j.id);}catch(e){}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/inventory",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "inventory"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Óleo sintético 5W40 {{$timestamp}}\",\n  \"unitOfMeasure\": \"ML\",\n  \"unitPrice\": 59.9,\n  \"quantity\": 20,\n  \"minQuantity\": 5\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
             {
               "name": "B2.1 Abrir OS",
               "event": [
@@ -1239,7 +1414,10 @@
                       "const secret = pm.collectionVariables.get(\"webhookSecret\");",
                       "const body = pm.variables.replaceIn(pm.request.body.raw);",
                       "pm.request.body.update({mode:\"raw\", raw: body, options:{raw:{language:\"json\"}}});",
-                      "const hex = CryptoJS.HmacSHA256(body, secret).toString(CryptoJS.enc.Hex);",
+                      "const enc = new TextEncoder();",
+                      "const key = await crypto.subtle.importKey(\"raw\", enc.encode(secret), { name: \"HMAC\", hash: \"SHA-256\" }, false, [\"sign\"]);",
+                      "const sig = await crypto.subtle.sign(\"HMAC\", key, enc.encode(body));",
+                      "const hex = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, \"0\")).join(\"\");",
                       "pm.variables.set(\"webhookSignature\", \"sha256=\" + hex);"
                     ]
                   }
@@ -1297,6 +1475,92 @@
         {
           "name": "B3 - Cancelar a OS",
           "item": [
+            {
+              "name": "B3.0a Cadastrar serviço (pré-requisito)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status 2xx\",()=>pm.expect(pm.response.code).to.be.within(200,299));",
+                      "try{const j=pm.response.json(); if(j&&j.id) pm.collectionVariables.set(\"serviceId\", j.id);}catch(e){}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/services",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "services"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Troca de óleo {{$timestamp}}\",\n  \"price\": 150\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "B3.0b Cadastrar peça (pré-requisito)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status 2xx\",()=>pm.expect(pm.response.code).to.be.within(200,299));",
+                      "try{const j=pm.response.json(); if(j&&j.id) pm.collectionVariables.set(\"partId\", j.id);}catch(e){}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/inventory",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "inventory"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Óleo sintético 5W40 {{$timestamp}}\",\n  \"unitOfMeasure\": \"ML\",\n  \"unitPrice\": 59.9,\n  \"quantity\": 20,\n  \"minQuantity\": 5\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
             {
               "name": "B3.1 Abrir OS",
               "event": [
@@ -1379,6 +1643,92 @@
         {
           "name": "B4 - Links do e-mail",
           "item": [
+            {
+              "name": "B4.0a Cadastrar serviço (pré-requisito)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status 2xx\",()=>pm.expect(pm.response.code).to.be.within(200,299));",
+                      "try{const j=pm.response.json(); if(j&&j.id) pm.collectionVariables.set(\"serviceId\", j.id);}catch(e){}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/services",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "services"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Troca de óleo {{$timestamp}}\",\n  \"price\": 150\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "B4.0b Cadastrar peça (pré-requisito)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status 2xx\",()=>pm.expect(pm.response.code).to.be.within(200,299));",
+                      "try{const j=pm.response.json(); if(j&&j.id) pm.collectionVariables.set(\"partId\", j.id);}catch(e){}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/inventory",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "inventory"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Óleo sintético 5W40 {{$timestamp}}\",\n  \"unitOfMeasure\": \"ML\",\n  \"unitPrice\": 59.9,\n  \"quantity\": 20,\n  \"minQuantity\": 5\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
             {
               "name": "B4.1 Abrir OS",
               "event": [
@@ -1808,14 +2158,14 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/auth/users/{{id}}",
+              "raw": "{{baseUrl}}/auth/users/{{userId}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "auth",
                 "users",
-                "{{id}}"
+                "{{userId}}"
               ]
             },
             "description": "Update a user",
@@ -1837,14 +2187,14 @@
             "method": "DELETE",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/auth/users/{{id}}",
+              "raw": "{{baseUrl}}/auth/users/{{userId}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "auth",
                 "users",
-                "{{id}}"
+                "{{userId}}"
               ]
             },
             "description": "Soft delete a user"
@@ -2978,7 +3328,10 @@
                   "const secret = pm.collectionVariables.get(\"webhookSecret\");",
                   "const body = pm.variables.replaceIn(pm.request.body.raw);",
                   "pm.request.body.update({mode:\"raw\", raw: body, options:{raw:{language:\"json\"}}});",
-                  "const hex = CryptoJS.HmacSHA256(body, secret).toString(CryptoJS.enc.Hex);",
+                  "const enc = new TextEncoder();",
+                  "const key = await crypto.subtle.importKey(\"raw\", enc.encode(secret), { name: \"HMAC\", hash: \"SHA-256\" }, false, [\"sign\"]);",
+                  "const sig = await crypto.subtle.sign(\"HMAC\", key, enc.encode(body));",
+                  "const hex = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, \"0\")).join(\"\");",
                   "pm.variables.set(\"webhookSignature\", \"sha256=\" + hex);"
                 ]
               }

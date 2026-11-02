@@ -29,7 +29,8 @@ const VAR = {
   '/service-orders': 'serviceOrderId',
 };
 const pv = (p) => {
-  const base = '/' + p.split('/')[1];
+  const seg = p.split('/');
+  const base = seg[1] === 'auth' ? '/auth/' + seg[2] : '/' + seg[1];
   return VAR[base] || 'id';
 };
 const ev = (lines) => [{ listen: 'test', script: { type: 'text/javascript', exec: lines } }];
@@ -250,14 +251,34 @@ function sigScript() {
     'const secret = pm.collectionVariables.get("webhookSecret");',
     'const body = pm.variables.replaceIn(pm.request.body.raw);',
     'pm.request.body.update({mode:"raw", raw: body, options:{raw:{language:"json"}}});',
-    'const hex = CryptoJS.HmacSHA256(body, secret).toString(CryptoJS.enc.Hex);',
+    'const enc = new TextEncoder();',
+    'const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);',
+    'const sig = await crypto.subtle.sign("HMAC", key, enc.encode(body));',
+    'const hex = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, "0")).join("");',
     'pm.variables.set("webhookSignature", "sha256=" + hex);',
   ]);
 }
 // ---- fluxo guiado
 const mk = (n, m, p, opt = {}) => req(n, m, p, opt);
 const okT = (c = 200) => okTest(c);
+const setup = (pfx) => [
+  mk(`${pfx}.0a Cadastrar serviço (pré-requisito)`, 'POST', '/services', {
+    body: { name: 'Troca de óleo {{$timestamp}}', price: 150 },
+    events: [captureId('serviceId')],
+  }),
+  mk(`${pfx}.0b Cadastrar peça (pré-requisito)`, 'POST', '/inventory', {
+    body: {
+      name: 'Óleo sintético 5W40 {{$timestamp}}',
+      unitOfMeasure: 'ML',
+      unitPrice: 59.9,
+      quantity: 20,
+      minQuantity: 5,
+    },
+    events: [captureId('partId')],
+  }),
+];
 const prep = (pfx) => [
+  ...setup(pfx),
   mk(`${pfx}.1 Abrir OS`, 'POST', '/service-orders', { body: osBody(), events: [osCapture()] }),
   mk(`${pfx}.2 Iniciar diagnóstico (mecânico)`, 'PATCH', '/service-orders/{id}/start-diagnosis', {
     events: [okT()],
@@ -372,6 +393,7 @@ const alt = [
   {
     name: 'B3 - Cancelar a OS',
     item: [
+      ...setup('B3'),
       mk('B3.1 Abrir OS', 'POST', '/service-orders', { body: osBody(), events: [osCapture()] }),
       mk('B3.2 Cancelar OS', 'PATCH', '/service-orders/{id}/cancel-service', { events: [okT()] }),
     ],
@@ -464,7 +486,6 @@ const col = {
       .map((t) => ({ name: '02 - ' + folderName[t], item: groups[t] })),
   ],
 };
-// fix the public tracking token var for generic track
 fs.writeFileSync(outFile, JSON.stringify(col, null, 2) + '\n');
 const total = Object.values(groups).flat().length;
 console.log('requests genéricos', total, '| fluxo', lc.length, '| alternativos', alt.length);
