@@ -128,14 +128,16 @@ Crie o arquivo `.env` a partir do `.env.example` e utilize `NODE_ENV=development
 
 ```env
 NODE_ENV=development
+PORT=3000
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/garage-flow?schema=public
 
 # Autenticação (JWT)
 JWT_SECRET=troque-por-um-segredo-forte
 JWT_EXPIRES_IN=1d
 
-# Link público de rastreamento da OS
+# Assinatura dos links públicos e do webhook de orçamento
 TRACKING_TOKEN_SECRET=troque-por-outro-segredo-forte
+BUDGET_WEBHOOK_SECRET=troque-por-um-segredo-do-webhook
 
 # Webhook de decisão do orçamento: chave do HMAC que assina o corpo da requisição
 BUDGET_WEBHOOK_SECRET=troque-por-um-segredo-do-webhook
@@ -154,6 +156,22 @@ SMTP_FROM="Garage Flow <no-reply@garageflow.local>"
 > No Docker Compose, a API usa `SMTP_HOST=mailpit` (nome do serviço), definido no próprio `docker-compose.development.yaml`. `PUBLIC_BASE_URL` deve apontar para o endereço pelo qual o cliente alcança a API, pois é dele que saem os links dos e-mails.
 
 O arquivo `.env` é utilizado pelo Docker Compose e pelos comandos executados localmente. No ambiente de produção, as configurações são fornecidas pelos recursos `ConfigMap` e `Secret` do Kubernetes.
+
+As variáveis lidas pela API são:
+
+| Variável | Origem no Kubernetes | Uso |
+| --- | --- | --- |
+| `NODE_ENV`, `PORT` | `garage-flow-config` | Ambiente e porta HTTP (padrão `3000`) |
+| `DATABASE_URL` | `garage-flow-secrets` | Conexão do Prisma com o PostgreSQL |
+| `JWT_SECRET` | `garage-flow-secrets` | Assinatura dos tokens de autenticação |
+| `JWT_EXPIRES_IN` | `garage-flow-config` | Validade do JWT (padrão da aplicação: `1h`) |
+| `TRACKING_TOKEN_SECRET` | `garage-flow-secrets` | Assinatura dos links públicos de acompanhamento e decisão |
+| `BUDGET_WEBHOOK_SECRET` | `garage-flow-secrets` | HMAC-SHA256 do webhook de decisão do orçamento |
+| `PUBLIC_BASE_URL` | `garage-flow-config` | Base dos links enviados por e-mail; no deploy cloud recebe o host do Ingress |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM` | `garage-flow-config` | Endereço e remetente do servidor de e-mail |
+| `SMTP_USER`, `SMTP_PASS` | `garage-flow-secrets` | Autenticação SMTP; podem ficar vazias para um servidor sem autenticação |
+
+`ADMIN_NAME`, `ADMIN_EMAIL` e `ADMIN_PASSWORD` não são variáveis do processo normal da API: são consumidas somente pelo Job temporário de bootstrap do primeiro administrador.
 
 ### 2. Subir a aplicação
 
@@ -527,7 +545,7 @@ Fora da `main` ou sem a confirmação exata, o job falha antes de qualquer acess
 
 - Login na Azure por **OIDC** (credencial federada do service principal `sp-garage-flow-github-actions`, aceita só para a `main`). **Nenhum secret é armazenado no GitHub.**
 - Três **repository variables** (Settings → Secrets and variables → Actions → Variables): `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` e `AZURE_SUBSCRIPTION_ID`. Não são valores sensíveis.
-- Os segredos da aplicação (senha do banco, `JWT_SECRET`, `TRACKING_TOKEN_SECRET`, senha do admin) são gerados pelo Terraform e guardados no Key Vault; os da API viram o Secret `garage-flow-secrets` no cluster. As credenciais do primeiro admin só existem no cluster durante o Job de bootstrap: o deploy cria o Secret a partir dos outputs do Terraform, com a senha mascarada no log, e o apaga em seguida.
+- Os segredos gerados da aplicação (senha do banco, `JWT_SECRET`, `TRACKING_TOKEN_SECRET`, `BUDGET_WEBHOOK_SECRET` e senha do admin) ficam no Key Vault; os segredos usados pela API viram o Secret `garage-flow-secrets` no cluster. `SMTP_USER` e `SMTP_PASS`, quando necessários, são recebidos por `TF_VAR_smtp_user` e `TF_VAR_smtp_pass`, nunca por um `.tfvars` versionado. As credenciais do primeiro admin só existem no cluster durante o Job de bootstrap: o deploy cria o Secret a partir dos outputs do Terraform, com a senha mascarada no log, e o apaga em seguida.
 
 ### Avisos
 

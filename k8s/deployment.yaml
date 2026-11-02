@@ -22,11 +22,11 @@ spec:
 
           resources:
             requests:
-              memory: "256Mi"
-              cpu: "250m"
+              memory: '256Mi'
+              cpu: '250m'
             limits:
-              memory: "512Mi"
-              cpu: "500m"
+              memory: '512Mi'
+              cpu: '500m'
 
           livenessProbe:
             httpGet:
@@ -48,6 +48,12 @@ spec:
                 configMapKeyRef:
                   name: garage-flow-config
                   key: NODE_ENV
+
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: garage-flow-config
+                  key: PORT
 
             - name: JWT_EXPIRES_IN
               valueFrom:

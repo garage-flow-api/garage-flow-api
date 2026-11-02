@@ -32,10 +32,11 @@ services:
       context: .
       target: development
     ports:
-      - '3000:3000'
+      - '${PORT:-3000}:${PORT:-3000}'
       - '9229:9229'
     environment:
       NODE_ENV: ${NODE_ENV}
+      PORT: ${PORT:-3000}
       CHOKIDAR_USEPOLLING: 'true'
       WATCHPACK_POLLING: 'true'
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/garage-flow?schema=public
@@ -43,10 +44,12 @@ services:
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
       TRACKING_TOKEN_SECRET: ${TRACKING_TOKEN_SECRET}
       BUDGET_WEBHOOK_SECRET: ${BUDGET_WEBHOOK_SECRET}
-      PUBLIC_BASE_URL: http://localhost:3000
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}
       SMTP_HOST: mailpit
       SMTP_PORT: 1025
-      SMTP_FROM: 'Garage Flow <no-reply@garageflow.local>'
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: '${SMTP_FROM:-Garage Flow <no-reply@garageflow.local>}'
     volumes:
       - .:/app
       - /app/node_modules
