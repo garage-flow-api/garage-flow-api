@@ -33,6 +33,9 @@ RUN npx prisma generate
 
 RUN npm run build
 
+# O estágio build também é usado como imagem dos Jobs de migration/bootstrap.
+USER 1000:1000
+
 # ---------------------------------------------------------------------------
 # production: lean runtime image with only production dependencies
 # ---------------------------------------------------------------------------
@@ -47,6 +50,6 @@ COPY --from=build /app/generated ./generated
 
 EXPOSE 3000
 
-USER node
+USER 1000:1000
 
 CMD ["node", "dist/src/main"]

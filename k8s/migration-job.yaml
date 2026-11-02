@@ -13,10 +13,20 @@ spec:
 
     spec:
       restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
 
       initContainers:
         - name: wait-for-postgres
           image: postgres:16
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            runAsGroup: 999
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
 
           env:
             - name: POSTGRES_USER
@@ -49,6 +59,14 @@ spec:
         - name: migrate
           image: garage-flow-api-migration:local
           imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
 
           command:
             - npx

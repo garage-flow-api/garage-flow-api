@@ -40,9 +40,9 @@ describe('SmtpNotificationGateway', () => {
         recipientName: 'Maria',
         lines: [],
         totalAmount: 0,
-        approveUrl: 'a',
-        rejectUrl: 'r',
-        trackingLink: 't',
+        approveUrl: 'https://example.com/approve',
+        rejectUrl: 'https://example.com/reject',
+        trackingLink: 'https://example.com/track',
       }),
     ).rejects.toThrow('SMTP indisponível');
   });
