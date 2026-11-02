@@ -10,10 +10,20 @@ spec:
         app: garage-flow-bootstrap-admin
     spec:
       restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
       containers:
         - name: bootstrap-admin
           image: garage-flow-api-migration:local
           imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           command:
             - npm
             - run

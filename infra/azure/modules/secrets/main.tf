@@ -49,6 +49,7 @@ resource "azurerm_key_vault_secret" "this" {
   name         = each.value
   value        = var.values[each.value]
   key_vault_id = azurerm_key_vault.this.id
+  content_type = "text/plain"
 
   depends_on = [time_sleep.rbac_propagation]
 }
