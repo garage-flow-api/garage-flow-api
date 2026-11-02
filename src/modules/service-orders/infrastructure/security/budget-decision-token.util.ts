@@ -30,6 +30,7 @@ export function generateBudgetDecisionToken(
   return `${payload}.${sign(payload)}`;
 }
 
+/** Devolve null para qualquer token que não possa ser aceito (inclusive sem segredo configurado). */
 export function verifyBudgetDecisionToken(
   token: string,
   now: number = Date.now(),
@@ -38,11 +39,11 @@ export function verifyBudgetDecisionToken(
   if (parts.length !== 2) return null;
   const [payload, signature] = parts;
 
-  const expected = Buffer.from(sign(payload));
-  const received = Buffer.from(signature);
-  if (expected.length !== received.length || !timingSafeEqual(expected, received)) return null;
-
   try {
+    const expected = Buffer.from(sign(payload));
+    const received = Buffer.from(signature);
+    if (expected.length !== received.length || !timingSafeEqual(expected, received)) return null;
+
     const body = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as {
       id?: unknown;
       a?: unknown;

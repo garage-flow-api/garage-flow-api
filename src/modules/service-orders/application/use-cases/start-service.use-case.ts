@@ -16,9 +16,10 @@ export class StartServiceUseCase {
     const serviceOrder = await this.serviceOrderRepository.findById(serviceOrderId);
     if (!serviceOrder) throw new NotFoundError('Service order not found');
 
+    const previousStatus = serviceOrder.status;
     serviceOrder.startService(mechanicId);
     await this.serviceOrderRepository.save(serviceOrder);
-    await this.notifyStatusChange.execute(serviceOrder);
+    await this.notifyStatusChange.execute(serviceOrder, previousStatus);
     return serviceOrder;
   }
 }

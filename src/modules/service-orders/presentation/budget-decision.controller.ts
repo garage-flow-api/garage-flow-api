@@ -2,6 +2,7 @@
 import { Controller, Get, Header, HttpCode, Param, Post } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
 
+import { NotFoundError } from '@common/errors/domain.error';
 import { BudgetDecision } from '@service-orders/domain/value-objects/budget-decision.vo';
 import { ProcessBudgetDecisionUseCase } from '@service-orders/application/use-cases/process-budget-decision.use-case';
 import {
@@ -14,10 +15,11 @@ const LABEL: Record<BudgetDecisionAction, { verb: string; done: string }> = {
   reject: { verb: 'recusar', done: 'recusado' },
 };
 
-// Só textos fixos e o token já verificado (HMAC) entram no HTML: não há entrada do usuário a escapar.
-function page(title: string, body: string, form?: { action: string; button: string }): string {
-  const formHtml = form
-    ? `<form method="post" action="${form.action}"><button type="submit">${form.button}</button></form>`
+// Só textos fixos entram no HTML: não há entrada do usuário a escapar. O formulário não define
+// "action", então o POST vai para a própria URL (funciona também atrás de proxy com prefixo).
+function page(title: string, body: string, buttonLabel?: string): string {
+  const formHtml = buttonLabel
+    ? `<form method="post"><button type="submit">${buttonLabel}</button></form>`
     : '';
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title>
@@ -42,10 +44,11 @@ export class BudgetDecisionController {
     if (!payload) return INVALID;
 
     const { verb } = LABEL[payload.action];
-    return page(`Deseja ${verb} o orçamento?`, 'Confirme abaixo para registrar a sua decisão.', {
-      action: `/budget-decisions/${token}`,
-      button: `Confirmar: ${verb} orçamento`,
-    });
+    return page(
+      `Deseja ${verb} o orçamento?`,
+      'Confirme abaixo para registrar a sua decisão.',
+      `Confirmar: ${verb} orçamento`,
+    );
   }
 
   @Post(':token')
@@ -58,10 +61,15 @@ export class BudgetDecisionController {
 
     const decision =
       payload.action === 'approve' ? BudgetDecision.APPROVED : BudgetDecision.REJECTED;
-    const { processed } = await this.processBudgetDecision.execute(
-      payload.serviceOrderId,
-      decision,
-    );
+
+    let processed: boolean;
+    try {
+      ({ processed } = await this.processBudgetDecision.execute(payload.serviceOrderId, decision));
+    } catch (error) {
+      // OS removida depois do envio do e-mail: mostra a página, e não um JSON de erro
+      if (error instanceof NotFoundError) return INVALID;
+      throw error;
+    }
 
     if (!processed) {
       return page(

@@ -62,6 +62,7 @@ describe('AddServicesAndPartsUseCase', () => {
       findById: jest.fn().mockResolvedValue(buildServiceOrder()),
       findAll: jest.fn(),
       findAverageExecutionTime: jest.fn(),
+      lockForUpdate: jest.fn(),
     };
     findServicesByIdList = { execute: jest.fn().mockResolvedValue([service]) };
     checkPartsAvailability = { execute: jest.fn().mockResolvedValue([buildAvailability(10)]) };

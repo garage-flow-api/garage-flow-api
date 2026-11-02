@@ -106,4 +106,28 @@ describe('NotifyServiceOrderStatusChangeUseCase', () => {
       useCase.execute(makeServiceOrder({ vehicleId: vehicle.id })),
     ).resolves.toBeUndefined();
   });
+
+  it('não deve enviar e-mail quando o status público não muda', async () => {
+    const serviceOrder = makeServiceOrder({
+      vehicleId: vehicle.id,
+      status: ServiceOrderStatus.IN_EXECUTION,
+    });
+
+    await useCase.execute(serviceOrder, ServiceOrderStatus.AWAITING_EXECUTION);
+
+    expect(gateway.sendStatusUpdate).not.toHaveBeenCalled();
+    expect(gateway.sendBudget).not.toHaveBeenCalled();
+    expect(findClientById.execute).not.toHaveBeenCalled();
+  });
+
+  it('deve enviar o e-mail quando o status público muda em relação ao anterior', async () => {
+    const serviceOrder = makeServiceOrder({
+      vehicleId: vehicle.id,
+      status: ServiceOrderStatus.AWAITING_EXECUTION,
+    });
+
+    await useCase.execute(serviceOrder, ServiceOrderStatus.AWAITING_APPROVAL);
+
+    expect(gateway.sendStatusUpdate).toHaveBeenCalledTimes(1);
+  });
 });

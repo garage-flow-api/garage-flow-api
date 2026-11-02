@@ -3,7 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { NotificationGateway } from '@notification/application/notification.gateway';
 import { type ServiceOrder } from '@service-orders/domain/entities/service-order.entity';
 import { ServiceOrderStatus } from '@service-orders/domain/value-objects/service-order-status.vo';
-import { toPublicStatus } from '@service-orders/domain/value-objects/public-service-order-status.vo'; // ajuste o caminho/nome da PR 4
+import { toPublicStatus } from '@service-orders/domain/value-objects/public-service-order-status.vo';
 import { buildTrackingLink } from '@service-orders/infrastructure/security/tracking-token.util';
 import { buildBudgetDecisionLink } from '@service-orders/infrastructure/security/budget-decision-token.util';
 import { BuildServiceOrderBudgetUseCase } from '@service-orders/application/use-cases/build-service-order-budget.use-case';
@@ -21,9 +21,19 @@ export class NotifyServiceOrderStatusChangeUseCase {
     private readonly buildBudget: BuildServiceOrderBudgetUseCase,
   ) {}
 
-  /** Nunca lança: falha de e-mail não pode desfazer a mudança de status. */
-  async execute(serviceOrder: ServiceOrder): Promise<void> {
+  /**
+   * Nunca lança: falha de e-mail não pode desfazer a mudança de status.
+   * Quando `previousStatus` é informado e o cliente enxerga o mesmo status que antes
+   * (ex.: AWAITING_EXECUTION -> IN_EXECUTION, ambos "Execução"), nenhum e-mail é enviado.
+   */
+  async execute(serviceOrder: ServiceOrder, previousStatus?: ServiceOrderStatus): Promise<void> {
     try {
+      if (
+        previousStatus !== undefined &&
+        toPublicStatus(previousStatus) === toPublicStatus(serviceOrder.status)
+      ) {
+        return;
+      }
       await this.notify(serviceOrder);
     } catch (error) {
       this.logger.error(

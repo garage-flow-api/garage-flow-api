@@ -59,4 +59,16 @@ describe('budget-decision-token.util', () => {
 
     expect(link).toMatch(/^http:\/\/localhost:3000\/budget-decisions\/.+\..+$/);
   });
+
+  it('retorna null, sem lançar erro, quando o segredo não está configurado', () => {
+    const token = generateBudgetDecisionToken('so-1', 'approve');
+    const secret = process.env.TRACKING_TOKEN_SECRET;
+    delete process.env.TRACKING_TOKEN_SECRET;
+
+    try {
+      expect(verifyBudgetDecisionToken(token)).toBeNull();
+    } finally {
+      process.env.TRACKING_TOKEN_SECRET = secret;
+    }
+  });
 });
