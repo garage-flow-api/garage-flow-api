@@ -13,10 +13,20 @@ spec:
       labels:
         app: garage-flow
     spec:
+      securityContext:
+        runAsNonRoot: true
       containers:
         - name: garage-flow-api
           image: garage-flow-api:local
           imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           ports:
             - containerPort: 3000
 
