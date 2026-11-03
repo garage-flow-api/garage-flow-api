@@ -35,6 +35,13 @@ Na Fase 2, a aplicação desenvolvida na etapa anterior passa a ser preparada pa
 
 Neste repositório, o ambiente de desenvolvimento é executado com Docker Compose, enquanto o ambiente de produção utiliza os manifestos Kubernetes, incluindo migrations e a criação segura do primeiro administrador.
 
+## Vídeos demonstrativos
+
+| Fase | Vídeo |
+| --- | --- |
+| Fase 1 | [Demonstração da Fase 1](https://www.youtube.com/watch?v=J_FZ44TaDE4) |
+| Fase 2 | [Demonstração da Fase 2](https://www.youtube.com/watch?v=lWedPmdsMa4) |
+
 ## Tecnologias
 
 - **NestJS + TypeScript**
