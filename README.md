@@ -124,6 +124,7 @@ Os e-mails saem pelo SMTP da Brevo, fora da Azure. O host fica no ConfigMap, e o
 flowchart TB
     user(["Cliente HTTP"])
     gha(["GitHub Actions<br/>login OIDC"])
+    tf(["Terraform"])
     mail(["Brevo<br/>SMTP externo"])
 
     subgraph azure["Azure, ambiente staging"]
@@ -137,7 +138,8 @@ flowchart TB
                 ingress["NGINX Ingress Controller"]
                 api["Pods da API<br/>HPA de 1 a 8 réplicas por CPU"]
                 jobs["Jobs de migration<br/>e do primeiro admin"]
-                config["Secret e ConfigMap"]
+                secret["Secret Kubernetes<br/>criado pelo Terraform"]
+                config["ConfigMap<br/>aplicado pelo Kustomize"]
                 alias["Service ExternalName<br/>garage-flow-postgres"]
             end
             subgraph snetpg["Subnet privada"]
@@ -149,15 +151,19 @@ flowchart TB
     user -- "HTTP" --> lb
     lb --> ingress
     ingress --> api
-    api --> alias
-    jobs --> alias
-    alias -. "DNS privado, TLS" .-> pg
+    api -- "DNS privado, TLS 5432" --> pg
+    jobs -- "DATABASE_URL, TLS 5432" --> pg
+    jobs -. "readiness" .-> alias
+    alias -. "ExternalName" .-> pg
+    secret -.-> api
+    secret -.-> jobs
     config -.-> api
-    config -.-> jobs
     aks -. "AcrPull" .-> acr
     gha -- "push das imagens" --> acr
     gha -- "kubectl apply" --> aks
-    kv -. "Terraform grava nos dois" .- config
+    gha -- "workflow manual" --> tf
+    tf -. "grava os segredos gerados" .-> kv
+    tf -. "cria" .-> secret
     api -- "SMTP" --> mail
 ```
 
@@ -548,7 +554,7 @@ Acessos:
 
 ### 9. Aplicar o HPA
 
-O HPA mantém entre 1 e 5 réplicas da API. Uma nova réplica pode ser criada quando a utilização média alcançar `60%` de CPU.
+O HPA mantém entre 1 e 8 réplicas da API. Uma nova réplica pode ser criada quando a utilização média alcançar `60%` de CPU.
 
 Quando a demanda diminui, o HPA aguarda uma janela de estabilização de 60 segundos e reduz, no máximo, 50% das réplicas a cada 30 segundos.
 

@@ -41,20 +41,22 @@ flowchart TB
 
     subgraph azure[Azure · rg-garage-flow-staging]
         acr[(ACR Basic)]
-        kv[(Key Vault)]
+        kv[(Key Vault Standard · RBAC)]
+        lb[Azure Load Balancer Standard<br/>IP público]
+        dns[(Private DNS Zone)]
 
         subgraph vnet[VNet 10.20.0.0/16]
-            lb[Azure Load Balancer]
-            subgraph aks[AKS Free · 2× Standard_B2als_v2]
-                ingress[NGINX Ingress Controller]
-                api[Pods da API<br/>HPA 1-10 réplicas]
-                jobs[Jobs<br/>migration · bootstrap admin]
-                alias[Service ExternalName<br/>garage-flow-postgres]
+            subgraph snetaks[Subnet snet-aks]
+                subgraph aks[AKS Free · 3× Standard_B2als_v2<br/>Azure CNI Overlay · Managed Identity]
+                    ingress[NGINX Ingress Controller]
+                    api[Pods da API<br/>HPA 1-8 réplicas por CPU]
+                    jobs[Jobs<br/>migration · bootstrap admin]
+                    alias[Service ExternalName<br/>garage-flow-postgres]
+                end
             end
-            subgraph snetpg[Subnet delegada]
-                pg[(PostgreSQL Flexible Server 16<br/>B_Standard_B1ms)]
+            subgraph snetpg[Subnet snet-postgres · delegada]
+                pg[(PostgreSQL Flexible Server 16<br/>B_Standard_B2s · 32 GiB)]
             end
-            dns[Private DNS Zone]
         end
     end
 
@@ -63,6 +65,7 @@ flowchart TB
     jobs -- via alias --> alias -.-> pg
     aks -. AcrPull .-> acr
     pg --- dns
+    dns -. vinculada à VNet .-> vnet
 ```
 
 ### Fluxo de provisionamento e deploy
@@ -115,9 +118,9 @@ infra/
 | Resource Group | `rg-garage-flow-staging` | Agrupamento e remoção em bloco |
 | VNet | `10.20.0.0/16` com subnets `snet-aks` e `snet-postgres` (delegada) | Rede isolada |
 | Private DNS Zone | `garage-flow-staging.private.postgres.database.azure.com` | Resolução privada do banco |
-| AKS | tier Free, 2× `Standard_B2als_v2` (2 vCPU / 4 GiB), Azure CNI Overlay, Managed Identity | Cluster Kubernetes gerenciado |
+| AKS | tier Free, 3× `Standard_B2als_v2` (2 vCPU / 4 GiB cada), Azure CNI Overlay, Managed Identity | Cluster Kubernetes gerenciado |
 | Role assignments | `Network Contributor` (subnet), `AcrPull` (ACR) | Permissões da identidade do AKS |
-| PostgreSQL Flexible Server | 16, `B_Standard_B1ms`, 32 GiB, acesso privado | Banco de dados da aplicação |
+| PostgreSQL Flexible Server | 16, `B_Standard_B2s`, 32 GiB, acesso privado | Banco de dados da aplicação |
 | ACR | Basic, sem usuário admin | Registry das imagens |
 | Key Vault | modo RBAC, soft delete 7 dias, sem purge protection | Cópia consultável dos segredos gerados |
 | Role assignments do Key Vault | `Key Vault Secrets Officer` para `secrets_officer_object_ids` + quem executa o Terraform | Acesso de pessoas e do pipeline aos secrets |
@@ -204,7 +207,7 @@ A região é definida em `location`, em `infra/azure/environments/staging.tfvars
 ### Particularidades da Azure for Students
 
 - **Regiões:** a policy da assinatura limita onde recursos podem ser criados. Um erro `RequestDisallowedByPolicy` indica uma região fora da lista.
-- **Quota de vCPUs:** a stack usa 2 nodes `Standard_B2als_v2` (4 vCPUs) e precisa de mais 2 vCPUs livres para upgrades do AKS. O wizard confere a quota na etapa 5.
+- **Quota de vCPUs:** a stack usa 3 nodes `Standard_B2als_v2` (6 vCPUs) e precisa comportar 1 node adicional durante upgrades do AKS (8 vCPUs no total). O wizard confere a quota na etapa 5.
 - **Resource providers:** o provider `azurerm` registra apenas o conjunto básico mais os serviços da stack (`resource_provider_registrations = "core"`). O modo padrão tenta registrar dezenas de serviços e costuma falhar nesse tipo de assinatura.
 - **Créditos:** a assinatura é desativada quando os créditos acabam. Execute `infra/scripts/destroy.sh` ao terminar cada sessão.
 
@@ -361,16 +364,18 @@ Credenciais necessárias no pipeline: service principal `sp-garage-flow-github-a
 
 ## Custos estimados
 
-Valores on-demand aproximados, apenas para referência de consumo dos créditos.
+Valores on-demand aproximados, consultados em 2 de novembro de 2026 para referência de consumo dos créditos. O valor real depende da oferta da assinatura, impostos, câmbio e eventuais mudanças de preço da Azure.
 
 | Azure (northcentralus) | US$/hora |
 | --- | --- |
 | AKS control plane (Free) | 0,00 |
-| 2× Standard_B2als_v2 | ~0,075 |
-| PostgreSQL B_Standard_B1ms + 32 GiB | ~0,02 |
+| 3× Standard_B2als_v2 | ~0,113 |
+| PostgreSQL B_Standard_B2s + 32 GiB | ~0,073 |
 | Standard Load Balancer + IP público | ~0,03 |
 | ACR Basic | ~0,007 |
-| **Total** | **~0,13 (~US$ 3/dia)** |
+| **Total** | **~0,223 (~US$ 5,35/dia)** |
+
+Estimativa baseada nos valores pay-as-you-go da [Azure Retail Prices API](https://learn.microsoft.com/rest/api/cost-management/retail-prices/azure-retail-prices) para `northcentralus`. Operações do Key Vault, tráfego de saída e o armazenamento de baixo volume do state não estão incluídos.
 
 ## Solução de problemas
 
